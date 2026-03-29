@@ -1,6 +1,6 @@
-import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { SafeQRCode } from '../../scannerRelay/SafeQRCode';
 import { useLaptopScannerRelay } from '../../scannerRelay/useLaptopScannerRelay';
 import {
   createCatalogProduct,
@@ -671,7 +671,7 @@ export function SellerInventoryPage() {
         {scannerRelay.active && scannerRelay.scanUrl ? (
           <div className="inv__scannerQrRow">
             <div className="inv__scannerQrBox">
-              <QRCode value={scannerRelay.scanUrl} size={168} level="M" />
+              <SafeQRCode value={scannerRelay.scanUrl} size={168} level="M" />
             </div>
             <p className="inv__scannerQrMeta">
               Scan with your phone — opens the camera page. Barcodes appear in the form under &ldquo;Add a product&rdquo;.
