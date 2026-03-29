@@ -46,7 +46,7 @@ export function setRole(role: PersistedRole): void {
   localStorage.setItem(ROLE_KEY, role);
 }
 
-/** Clear stored role hint (e.g. while server profile is PENDING). */
+/** Clear stored role hint (e.g. while server profile has no role yet). */
 export function clearPersistedRole(): void {
   localStorage.removeItem(ROLE_KEY);
 }

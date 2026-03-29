@@ -2,7 +2,7 @@ import type { BackendSession } from '../api/authSync';
 
 /** Default in-app path after Firebase login, from server role + onboarding. */
 export function defaultPostLoginPath(profile: BackendSession): string {
-  if (profile.role === 'PENDING') {
+  if (profile.role == null) {
     return '/welcome/role';
   }
   if (profile.role === 'CUSTOMER') {

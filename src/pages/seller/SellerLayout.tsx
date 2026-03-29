@@ -88,7 +88,7 @@ export function SellerLayout() {
       navigate('/welcome/role', { replace: true });
       return;
     }
-    if (backendProfile.role === 'PENDING') {
+    if (backendProfile.role == null) {
       navigate('/welcome/role', { replace: true });
       return;
     }

@@ -4,7 +4,8 @@ import { readErrorMessage } from './readErrorMessage';
 
 export type BackendSession = {
   id: string;
-  role: 'PENDING' | 'CUSTOMER' | 'SELLER';
+  /** Null until the user picks customer or seller; then locked on the server. */
+  role: 'CUSTOMER' | 'SELLER' | null;
   sellerOnboardingComplete: boolean;
 };
 

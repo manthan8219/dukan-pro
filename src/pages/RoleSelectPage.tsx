@@ -75,7 +75,7 @@ export function RoleSelectPage() {
 
   useEffect(() => {
     if (sessionSyncing || !backendProfile) return;
-    if (backendProfile.role !== 'PENDING') {
+    if (backendProfile.role != null) {
       navigate(defaultPostLoginPath(backendProfile), { replace: true });
     }
   }, [sessionSyncing, backendProfile, navigate]);

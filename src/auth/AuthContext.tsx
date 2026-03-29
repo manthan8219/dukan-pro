@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setBackendUserId(profile.id);
       setBackendProfile(profile);
-      if (profile.role === 'PENDING') {
+      if (profile.role == null) {
         clearPersistedRole();
       } else if (profile.role === 'SELLER') {
         setRole('seller');
@@ -126,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             setBackendUserId(profile.id);
             setBackendProfile(profile);
-            if (profile.role === 'PENDING') {
+            if (profile.role == null) {
               clearPersistedRole();
             } else if (profile.role === 'SELLER') {
               setRole('seller');

@@ -193,7 +193,7 @@ export function CustomerRouteShell({ children }: { children: ReactNode }) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
 
-  if (backendProfile?.role === 'PENDING') {
+  if (backendProfile?.role == null) {
     return <Navigate to="/welcome/role" replace />;
   }
 
