@@ -11,6 +11,8 @@ import {
   type CustomerDemandRecord,
 } from '../../api/customerDemands';
 import { registerContent } from '../../api/content';
+import { fetchStorageUploadEnabled } from '../../api/storage';
+import { uploadFileAndRegisterContent } from '../../api/uploadContent';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
 import type { MapLocateEvent } from '../../components/map';
 import { MapPinAddressSelect } from '../../components/map/MapPinAddressSelect';
@@ -54,6 +56,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [orderTotalInput, setOrderTotalInput] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
   const [receiptContentId, setReceiptContentId] = useState<string | null>(null);
+  const [storageUploadsEnabled, setStorageUploadsEnabled] = useState(false);
   const [deliveryPinLat, setDeliveryPinLat] = useState(
     () => getCachedDeviceCoordinates()?.latitude ?? FALLBACK_MAP_CENTER.latitude,
   );
@@ -63,6 +66,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
   const skipAccuracyResetCountRef = useRef(0);
+  const receiptFileInputRef = useRef<HTMLInputElement | null>(null);
   const [deliveryLocationConfirmed, setDeliveryLocationConfirmed] = useState(false);
   const [deliveryLocationLabel, setDeliveryLocationLabel] = useState('');
 
@@ -80,6 +84,10 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    void fetchStorageUploadEnabled().then(setStorageUploadsEnabled);
+  }, []);
 
   const openQuotesForDemand = useCallback(
     async (demandId: string) => {
@@ -202,6 +210,26 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     }
   }
 
+  async function onReceiptFileSelected(files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setFormError(null);
+    setBusy(true);
+    try {
+      const c = await uploadFileAndRegisterContent(file, {
+        visibility: 'private',
+        kind: 'IMAGE',
+        ownerUserId: serverUserId,
+      });
+      setReceiptContentId(c.id);
+      setReceiptUrl('');
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Could not upload receipt');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onCreateDraft(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -304,8 +332,17 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       </p>
 
       <div className="dm__banner">
-        Receipt image: paste a direct <strong>https</strong> link to the picture (for example from your cloud storage),
-        then tap <strong>Link receipt</strong>. Very long links may not work.
+        Receipt image: {storageUploadsEnabled ? (
+          <>
+            use <strong>Upload receipt</strong> (stored privately), or paste a direct <strong>https</strong> link and tap{' '}
+            <strong>Link receipt</strong>.
+          </>
+        ) : (
+          <>
+            paste a direct <strong>https</strong> link to the picture, then tap <strong>Link receipt</strong>. Server storage
+            uploads appear here when the API has Supabase S3 configured.
+          </>
+        )}
       </div>
 
       {loadError ? <p className="dm__err">{loadError}</p> : null}
@@ -315,7 +352,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
         <h2 className="dm__panelTitle">New draft</h2>
 
         <label className="dm__label" htmlFor={receiptUrlId}>
-          Receipt image URL (https)
+          Receipt image {storageUploadsEnabled ? '(upload or https URL)' : '(https URL)'}
         </label>
         <div className="dm__row2">
           <input
@@ -325,7 +362,32 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
             value={receiptUrl}
             onChange={(e) => setReceiptUrl(e.target.value)}
             placeholder="https://…/receipt.jpg"
+            disabled={busy}
           />
+          {storageUploadsEnabled ? (
+            <>
+              <input
+                ref={receiptFileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                disabled={busy}
+                onChange={(e) => {
+                  void onReceiptFileSelected(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+              <button
+                type="button"
+                className="dm__btn dm__btn--ghost"
+                style={{ marginBottom: 0 }}
+                disabled={busy}
+                onClick={() => receiptFileInputRef.current?.click()}
+              >
+                Upload receipt
+              </button>
+            </>
+          ) : null}
           <button
             type="button"
             className="dm__btn dm__btn--ghost"

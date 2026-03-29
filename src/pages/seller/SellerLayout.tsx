@@ -9,7 +9,11 @@ import './seller-dashboard.css';
 
 export type SellerOutletContext = { shopId: string | null };
 
-type SellerLocationState = { launched?: boolean; tierWarning?: string };
+type SellerLocationState = {
+  launched?: boolean;
+  tierWarning?: string;
+  attachWarning?: string;
+};
 
 let launchCelebrationLock = false;
 
@@ -75,6 +79,7 @@ export function SellerLayout() {
   const pageTitle = useMemo(() => titleFromPath(location.pathname), [location.pathname]);
 
   const tierWarning = (location.state as SellerLocationState | null)?.tierWarning;
+  const attachWarning = (location.state as SellerLocationState | null)?.attachWarning;
 
   useEffect(() => {
     if (getLastShopId() && !isSellerOnboardingComplete()) {
@@ -104,7 +109,11 @@ export function SellerLayout() {
     launchCelebrationLock = true;
 
     const tw = state.tierWarning;
-    navigate('.', { replace: true, state: tw ? { tierWarning: tw } : {} });
+    const aw = state.attachWarning;
+    const next: SellerLocationState = {};
+    if (tw) next.tierWarning = tw;
+    if (aw) next.attachWarning = aw;
+    navigate('.', { replace: true, state: Object.keys(next).length > 0 ? next : {} });
 
     window.setTimeout(() => {
       void confetti({
@@ -237,6 +246,11 @@ export function SellerLayout() {
           {tierWarning ? (
             <div className="sdash__alert" role="status">
               {tierWarning}
+            </div>
+          ) : null}
+          {attachWarning ? (
+            <div className="sdash__alert" role="status">
+              {attachWarning}
             </div>
           ) : null}
           <Outlet context={{ shopId }} />

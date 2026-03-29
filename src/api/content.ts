@@ -16,6 +16,8 @@ export async function registerContent(payload: {
   mimeType?: string | null;
   originalFileName?: string | null;
   ownerUserId?: string | null;
+  byteSize?: string | null;
+  metadata?: Record<string, unknown> | null;
 }): Promise<ContentRecord> {
   const res = await fetch(`${getApiBase()}/content`, {
     method: 'POST',
@@ -26,6 +28,8 @@ export async function registerContent(payload: {
       mimeType: payload.mimeType ?? null,
       originalFileName: payload.originalFileName ?? null,
       ownerUserId: payload.ownerUserId ?? null,
+      byteSize: payload.byteSize ?? null,
+      metadata: payload.metadata ?? null,
     }),
   });
   if (!res.ok) {

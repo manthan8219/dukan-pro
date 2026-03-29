@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import { registerContent } from '../../api/content';
+import { fetchStorageUploadEnabled } from '../../api/storage';
+import { uploadFileAndRegisterContent } from '../../api/uploadContent';
 import {
   listShopDemandInvitations,
   rejectDemandInvitation,
@@ -32,6 +34,10 @@ export function SellerDemandBoardPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [quoteText, setQuoteText] = useState<Record<string, string>>({});
   const [billUrl, setBillUrl] = useState<Record<string, string>>({});
+  const [billContentId, setBillContentId] = useState<Record<string, string>>({});
+  const [storageUploadsEnabled, setStorageUploadsEnabled] = useState(false);
+  const billFileInputRef = useRef<HTMLInputElement | null>(null);
+  const billFileInviteIdRef = useRef<string | null>(null);
 
   const shopNameDefault = loadBillingProfile().businessName.trim() || 'My shop';
 
@@ -48,6 +54,10 @@ export function SellerDemandBoardPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    void fetchStorageUploadEnabled().then(setStorageUploadsEnabled);
+  }, []);
 
   useEffect(() => {
     const inviteId = searchParams.get('invite');
@@ -82,6 +92,27 @@ export function SellerDemandBoardPage() {
     }
   }
 
+  async function onBillFileSelected(invitationId: string, files: FileList | null) {
+    const file = files?.[0];
+    if (!file) return;
+    setBusyId(invitationId);
+    setError(null);
+    try {
+      const isPdf =
+        file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+      const c = await uploadFileAndRegisterContent(file, {
+        visibility: 'private',
+        kind: isPdf ? 'DOCUMENT' : 'IMAGE',
+      });
+      setBillContentId((b) => ({ ...b, [invitationId]: c.id }));
+      setBillUrl((b) => ({ ...b, [invitationId]: '' }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function onSubmitQuote(inv: ShopDemandInvitation) {
     const text = (quoteText[inv.invitationId] ?? '').trim();
     if (!text) {
@@ -91,9 +122,9 @@ export function SellerDemandBoardPage() {
     setBusyId(inv.invitationId);
     setError(null);
     try {
-      let docId: string | null = null;
+      let docId: string | null = billContentId[inv.invitationId] ?? null;
       const url = (billUrl[inv.invitationId] ?? '').trim();
-      if (url) {
+      if (!docId && url) {
         if (!url.startsWith('http')) {
           setError('Attachment must be a public http(s) URL.');
           setBusyId(null);
@@ -113,6 +144,11 @@ export function SellerDemandBoardPage() {
       });
       setQuoteText((q) => ({ ...q, [inv.invitationId]: '' }));
       setBillUrl((b) => ({ ...b, [inv.invitationId]: '' }));
+      setBillContentId((b) => {
+        const next = { ...b };
+        delete next[inv.invitationId];
+        return next;
+      });
       refresh();
       window.dispatchEvent(new Event(SELLER_PENDING_INVITES_CHANGED_EVENT));
       window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED_EVENT));
@@ -147,9 +183,22 @@ export function SellerDemandBoardPage() {
         </h2>
         <p className="dm__lead" style={{ marginBottom: 0 }}>
           Customer requests published near <strong>{shopNameDefault}</strong> (you were inside their delivery radius).
-          Reject or send a quotation with optional bill/PDF link.
+          Reject or send a quotation with an optional bill, PDF, or quote image {storageUploadsEnabled ? '(upload or https link)' : '(https link — enable server storage for uploads)'}.
         </p>
       </div>
+
+      <input
+        ref={billFileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const id = billFileInviteIdRef.current;
+          if (id) void onBillFileSelected(id, e.target.files);
+          e.target.value = '';
+          billFileInviteIdRef.current = null;
+        }}
+      />
 
       {error ? <p className="dm__err" style={{ marginBottom: '0.75rem' }}>{error}</p> : null}
 
@@ -234,14 +283,42 @@ export function SellerDemandBoardPage() {
                     setQuoteText((q) => ({ ...q, [inv.invitationId]: e.target.value }))
                   }
                 />
-                <label className="dm__label">Bill, PDF, or quote image URL (optional)</label>
+                <label className="dm__label">Bill, PDF, or quote image (optional)</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                  {storageUploadsEnabled ? (
+                    <button
+                      type="button"
+                      className="dm__btn dm__btn--ghost dm__btn--sm"
+                      disabled={busyId === inv.invitationId}
+                      onClick={() => {
+                        billFileInviteIdRef.current = inv.invitationId;
+                        billFileInputRef.current?.click();
+                      }}
+                    >
+                      {billContentId[inv.invitationId] ? 'Replace upload' : 'Upload file'}
+                    </button>
+                  ) : null}
+                  {billContentId[inv.invitationId] ? (
+                    <span className="dm__hint" style={{ alignSelf: 'center' }}>
+                      File linked — will attach on submit.
+                    </span>
+                  ) : null}
+                </div>
                 <input
                   className="dm__input"
-                  placeholder="https://…/quote.pdf or .jpg"
+                  placeholder="Or paste https://…/quote.pdf or .jpg"
                   value={billUrl[inv.invitationId] ?? ''}
-                  onChange={(e) =>
-                    setBillUrl((b) => ({ ...b, [inv.invitationId]: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setBillUrl((b) => ({ ...b, [inv.invitationId]: v }));
+                    if (v.trim()) {
+                      setBillContentId((b) => {
+                        const next = { ...b };
+                        delete next[inv.invitationId];
+                        return next;
+                      });
+                    }
+                  }}
                 />
                 <button
                   type="button"

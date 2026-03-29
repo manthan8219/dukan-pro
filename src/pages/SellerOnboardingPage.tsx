@@ -3,6 +3,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { createDeliveryRadiusRule } from '../api/deliveryRadiusRule';
 import { createShopForUser } from '../api/createShop';
+import { attachShopContentLink } from '../api/shopContentLinks';
+import { uploadFileAndRegisterContent } from '../api/uploadContent';
 import {
   getBackendUserId,
   getLastShopId,
@@ -39,7 +41,7 @@ const WIZ_STEPS = [
     emoji: '📸',
     short: 'Glow-up',
     headline: 'Give your shop a face',
-    sub: 'Drop up to 8 pics. They stay on your device until you plug in cloud storage — we still leave a fun note on your shop record.',
+    sub: 'Drop up to 8 pics — when you launch, we upload them to your public shop bucket and save each file in your content library.',
     cheer: 'Photos make you stand out in the feed.',
     nextCta: 'Looking good — continue',
   },
@@ -320,6 +322,26 @@ export function SellerOnboardingPage() {
     setSubmitting(true);
     try {
       const name = shopName.trim();
+      const photoContentIds: string[] = [];
+      for (const file of photoFiles) {
+        try {
+          const row = await uploadFileAndRegisterContent(file, {
+            visibility: 'public',
+            kind: 'IMAGE',
+            ownerUserId: userId,
+          });
+          photoContentIds.push(row.id);
+        } catch (e) {
+          setError(
+            e instanceof Error
+              ? e.message
+              : 'Could not upload a shop photo. Check storage settings on the server.',
+          );
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const shop = await createShopForUser(userId, {
         name,
         displayName: name,
@@ -334,12 +356,23 @@ export function SellerOnboardingPage() {
           serviceRadiusKm,
         },
         gst: { isGstApplicable: false },
-        notes:
-          photoFiles.length > 0
-            ? `Onboarding photos selected locally (${photoFiles.length}). Connect file storage to register content URLs.`
-            : null,
+        notes: null,
       });
       setLastShopId(shop.id);
+
+      let attachWarning: string | undefined;
+      for (let i = 0; i < photoContentIds.length; i++) {
+        try {
+          await attachShopContentLink(shop.id, photoContentIds[i], i);
+        } catch (e) {
+          attachWarning =
+            e instanceof Error
+              ? e.message
+              : 'Photos uploaded but could not be linked to the shop.';
+          break;
+        }
+      }
+
       setSellerOnboardingComplete();
 
       const tiersToPost = radiusTiers
@@ -374,6 +407,7 @@ export function SellerOnboardingPage() {
         state: {
           launched: true,
           ...(tierWarning ? { tierWarning } : {}),
+          ...(attachWarning ? { attachWarning } : {}),
         },
       });
     } catch (e) {
