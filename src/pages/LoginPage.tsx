@@ -17,7 +17,7 @@ import { createInvisibleRecaptcha, normalizeToE164, requestPhoneOtp } from '../f
 import { AuthLayout } from '../layouts/AuthLayout';
 import './LoginPage.css';
 
-type LocationState = { from?: string; needSignIn?: boolean; needFirebase?: boolean };
+type LocationState = { from?: string; needFirebase?: boolean };
 type AuthTab = 'email' | 'phone' | 'google';
 
 export function LoginPage() {
@@ -205,13 +205,6 @@ export function LoginPage() {
           Put them in <code className="login__code">frontend/.env.local</code> (or <code className="login__code">.env</code>),
           then <strong>stop and restart</strong> <code className="login__code">npm run dev</code>. For production, set the same
           variables in your host’s build settings before <code className="login__code">npm run build</code>.
-        </p>
-      ) : null}
-
-      {state?.needSignIn ? (
-        <p className="login__banner login__banner--error" role="status">
-          Sign in to continue
-          {state.from ? ` (you tried to open ${state.from}).` : '.'}
         </p>
       ) : null}
 

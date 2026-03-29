@@ -25,7 +25,7 @@ export function RequireUser({ children }: RequireUserProps) {
   }
 
   if (!user) {
-    return <Navigate to="/" replace state={{ from: location.pathname, needSignIn: true }} />;
+    return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
 
   return children;

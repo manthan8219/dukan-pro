@@ -172,7 +172,7 @@ export function CustomerRouteShell({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to="/" replace state={{ from: location.pathname, needSignIn: true }} />;
+    return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
 
   if (backendProfile?.role === 'SELLER') {
