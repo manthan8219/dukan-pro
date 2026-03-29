@@ -37,8 +37,8 @@ type CustomerDeliveryAddressesContextValue = {
     patch: Partial<Omit<SavedAddress, 'id'>>,
   ) => Promise<void>;
   removeSavedAddress: (id: string) => Promise<void>;
-  /** Merge fields into the default (or only) saved address, or create one. */
-  saveDeliveryAddress: (a: DeliveryAddress) => Promise<void>;
+  /** Merge fields into the default (or only) saved address, or create one. Returns the saved row id for checkout. */
+  saveDeliveryAddress: (a: DeliveryAddress) => Promise<string>;
 };
 
 const CustomerDeliveryAddressesContext =
@@ -226,7 +226,7 @@ export function CustomerDeliveryAddressesProvider({
   );
 
   const saveDeliveryAddress = useCallback(
-    async (a: DeliveryAddress) => {
+    async (a: DeliveryAddress): Promise<string> => {
       const sel = getSelectedSavedAddress();
       if (sel) {
         const pinOk =
@@ -244,31 +244,32 @@ export function CustomerDeliveryAddressesProvider({
           pin: a.pin,
           ...(pinOk ? { latitude: a.latitude, longitude: a.longitude } : {}),
         });
-      } else {
-        const pinOk =
-          a.latitude != null &&
-          a.longitude != null &&
-          Number.isFinite(a.latitude) &&
-          Number.isFinite(a.longitude);
-        const body: CreateUserDeliveryAddressPayload = {
-          fullName: a.fullName,
-          phone: a.phone,
-          line1: a.line1,
-          line2: a.line2 || undefined,
-          landmark: a.landmark || undefined,
-          city: a.city,
-          pin: a.pin,
-          tag: 'home',
-          setAsDefault: true,
-        };
-        if (pinOk) {
-          body.latitude = a.latitude!;
-          body.longitude = a.longitude!;
-        }
-        await createUserDeliveryAddress(userId, body);
-        await refresh();
-        notifyDeliveryUpdated();
+        return sel.id;
       }
+      const pinOk =
+        a.latitude != null &&
+        a.longitude != null &&
+        Number.isFinite(a.latitude) &&
+        Number.isFinite(a.longitude);
+      const body: CreateUserDeliveryAddressPayload = {
+        fullName: a.fullName,
+        phone: a.phone,
+        line1: a.line1,
+        line2: a.line2 || undefined,
+        landmark: a.landmark || undefined,
+        city: a.city,
+        pin: a.pin,
+        tag: 'home',
+        setAsDefault: true,
+      };
+      if (pinOk) {
+        body.latitude = a.latitude!;
+        body.longitude = a.longitude!;
+      }
+      const created = await createUserDeliveryAddress(userId, body);
+      await refresh();
+      notifyDeliveryUpdated();
+      return created.id;
     },
     [userId, getSelectedSavedAddress, updateSavedAddress, refresh],
   );

@@ -135,6 +135,7 @@ export function CustomerShopPage() {
                       addItem({
                         shopId: activeShopId,
                         shopName,
+                        shopProductId: p.id,
                         productId: p.productId,
                         title: p.productName,
                         unitPrice,

@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { checkoutOrders, type OrderPaymentMethod } from '../../api/orders';
+import { useAuth } from '../../auth/AuthContext';
 import { useCustomerCart } from './cartContext';
+import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
 
 const DELIVERY_FEE = 40;
 const FREE_ABOVE = 499;
 
-type PayMethod = 'upi' | 'card' | 'cod' | 'wallet';
+type PayMethod = OrderPaymentMethod;
 
 const OPTIONS: { id: PayMethod; icon: string; title: string; sub: string }[] = [
   { id: 'upi', icon: '⚡', title: 'UPI', sub: 'PhonePe, GPay, Paytm — mock' },
@@ -14,22 +17,61 @@ const OPTIONS: { id: PayMethod; icon: string; title: string; sub: string }[] = [
   { id: 'cod', icon: '💵', title: 'Cash on delivery', sub: 'Pay when you receive' },
 ];
 
+type PaymentLocationState = { deliveryAddressId?: string };
+
 export function CustomerPaymentPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { backendProfile } = useAuth();
+  const { getSelectedSavedAddress } = useCustomerDeliveryAddresses();
   const { lines, subtotal, clearCart } = useCustomerCart();
   const [method, setMethod] = useState<PayMethod>('upi');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fee = useMemo(() => (subtotal >= FREE_ABOVE ? 0 : DELIVERY_FEE), [subtotal]);
   const total = subtotal + fee;
 
-  function placeOrder() {
+  const deliveryAddressId =
+    (location.state as PaymentLocationState | null)?.deliveryAddressId ??
+    getSelectedSavedAddress()?.id ??
+    null;
+
+  async function placeOrder() {
+    setError(null);
+    const userId = backendProfile?.id;
+    if (!userId) {
+      setError('Your account is still syncing. Try again in a moment.');
+      return;
+    }
+    if (!deliveryAddressId) {
+      setError('No delivery address. Go back to checkout and save your address.');
+      return;
+    }
+    const missingListing = lines.filter((l) => !l.shopProductId);
+    if (missingListing.length > 0) {
+      setError(
+        'Some basket lines are from an older format. Clear the basket and add items again from the shop page.',
+      );
+      return;
+    }
     setBusy(true);
-    window.setTimeout(() => {
+    try {
+      await checkoutOrders(userId, {
+        deliveryAddressId,
+        paymentMethod: method,
+        items: lines.map((l) => ({
+          shopProductId: l.shopProductId!,
+          quantity: l.qty,
+        })),
+      });
       clearCart();
-      setBusy(false);
       navigate('/app/customer', { replace: true, state: { orderPlaced: true } });
-    }, method === 'cod' ? 400 : 900);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not place order');
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (lines.length === 0) {
@@ -46,15 +88,32 @@ export function CustomerPaymentPage() {
 
   return (
     <>
-      <span className="cust__mockPill">No real charges</span>
+      <span className="cust__mockPill">Checkout API</span>
       <h2 className="cust__pageTitle">Payment</h2>
-      <p className="cust__sub">Pick a method. This only clears the demo cart — no gateway yet.</p>
+      <p className="cust__sub">
+        Pick a method. Orders are created on the server (one order per shop if your basket has multiple shops).
+      </p>
+
+      {!deliveryAddressId ? (
+        <p className="cust__sub" style={{ color: 'var(--cust-warn, #b45309)', marginBottom: '0.75rem' }}>
+          Delivery address missing — use checkout first so we can save where to ship.
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="cust__sub" style={{ color: 'var(--cust-danger, #b91c1c)', marginBottom: '0.75rem' }}>
+          {error}
+        </p>
+      ) : null}
 
       <div className="cust__panel" style={{ marginBottom: '1rem' }}>
         <div className="cust__summaryRow cust__summaryRow--total" style={{ border: 'none', margin: 0, padding: 0 }}>
-          <span>Amount due</span>
+          <span>Amount due (app estimate)</span>
           <span>₹{total}</span>
         </div>
+        <p className="cust__sub" style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>
+          Charged totals are computed on the server from live listing prices and delivery rules.
+        </p>
       </div>
 
       <p className="cust__sectionLabel">Pay with</p>
@@ -81,8 +140,8 @@ export function CustomerPaymentPage() {
         type="button"
         className="cust__btn cust__btn--primary cust__btn--block"
         style={{ marginTop: '1.25rem' }}
-        disabled={busy}
-        onClick={placeOrder}
+        disabled={busy || !deliveryAddressId}
+        onClick={() => void placeOrder()}
       >
         {busy ? 'Placing order…' : method === 'cod' ? 'Place order (COD)' : 'Pay & place order'}
       </button>

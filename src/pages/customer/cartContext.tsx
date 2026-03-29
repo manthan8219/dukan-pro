@@ -12,12 +12,19 @@ const CART_KEY = 'dukaanpro_customer_cart_v1';
 export type CartLine = {
   shopId: string;
   shopName: string;
+  /** Listing id (shop_products.id); required to place orders on the API. */
+  shopProductId?: string;
   productId: string;
   title: string;
   unitPrice: number;
   qty: number;
   unit: string;
 };
+
+function lineMergeKey(line: Pick<CartLine, 'shopId' | 'productId' | 'shopProductId'>): string {
+  if (line.shopProductId) return `sp:${line.shopProductId}`;
+  return `legacy:${line.shopId}|${line.productId}`;
+}
 
 function readCart(): CartLine[] {
   try {
@@ -31,13 +38,16 @@ function readCart(): CartLine[] {
         const o = row as Record<string, unknown>;
         const shopId = typeof o.shopId === 'string' ? o.shopId : '';
         const shopName = typeof o.shopName === 'string' ? o.shopName : '';
+        const shopProductId =
+          typeof o.shopProductId === 'string' && o.shopProductId.length > 0 ? o.shopProductId : undefined;
         const productId = typeof o.productId === 'string' ? o.productId : '';
         const title = typeof o.title === 'string' ? o.title : '';
         const unitPrice = typeof o.unitPrice === 'number' && Number.isFinite(o.unitPrice) ? o.unitPrice : 0;
         const qty = typeof o.qty === 'number' && o.qty >= 1 ? Math.floor(o.qty) : 0;
         const unit = typeof o.unit === 'string' ? o.unit : '';
         if (!shopId || !productId || !title || qty < 1) return null;
-        return { shopId, shopName, productId, title, unitPrice, qty, unit } satisfies CartLine;
+        const base = { shopId, shopName, productId, title, unitPrice, qty, unit };
+        return (shopProductId ? { ...base, shopProductId } : base) satisfies CartLine;
       })
       .filter((x): x is CartLine => x != null);
   } catch {
@@ -109,13 +119,20 @@ export function CustomerCartProvider({ children }: { children: ReactNode }) {
   const addItem = useCallback((line: Omit<CartLine, 'qty'> & { qty?: number }) => {
     const qty = line.qty ?? 1;
     const next = [...readCart()];
-    const i = next.findIndex((l) => l.shopId === line.shopId && l.productId === line.productId);
+    const key = lineMergeKey(line);
+    const i = next.findIndex((l) => lineMergeKey(l) === key);
     if (i >= 0) {
-      next[i] = { ...next[i], qty: next[i].qty + qty };
+      const mergedSp = line.shopProductId ?? next[i]!.shopProductId;
+      next[i] = {
+        ...next[i]!,
+        shopProductId: mergedSp,
+        qty: next[i]!.qty + qty,
+      };
     } else {
       next.push({
         shopId: line.shopId,
         shopName: line.shopName,
+        shopProductId: line.shopProductId,
         productId: line.productId,
         title: line.title,
         unitPrice: line.unitPrice,

@@ -54,12 +54,16 @@ export function CustomerCheckoutPage() {
   }
 
   async function persistAndGoPayment() {
+    let deliveryAddressId: string;
     if (selectedId) {
       await updateSavedAddress(selectedId, addr);
+      deliveryAddressId = selectedId;
     } else {
-      await saveDeliveryAddress(addr);
+      deliveryAddressId = await saveDeliveryAddress(addr);
     }
-    navigate('/app/customer/checkout/payment');
+    navigate('/app/customer/checkout/payment', {
+      state: { deliveryAddressId },
+    });
   }
 
   if (lines.length === 0) {
