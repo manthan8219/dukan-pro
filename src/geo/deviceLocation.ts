@@ -3,7 +3,8 @@
  * Caches successful reads so other screens reuse coordinates without extra prompts.
  */
 
-export const FALLBACK_MAP_CENTER = { latitude: 19.076, longitude: 72.8777 };
+/** Pune, India — used when GPS and cache are unavailable. */
+export const FALLBACK_MAP_CENTER = { latitude: 18.5204, longitude: 73.8567 };
 
 const CACHE_KEY = 'dukaanpro_device_geo_v1';
 const CACHE_MAX_AGE_MS = 30 * 60 * 1000;

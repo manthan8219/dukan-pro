@@ -1,4 +1,4 @@
-/* Google Maps JS API: centre-pin HUD over draggable map */
+/* MapLibre: centre-pin HUD over draggable map (same layout tokens as legacy Google picker) */
 
 .gmem {
   position: relative;
@@ -9,7 +9,7 @@
   flex-direction: column;
   min-height: 200px;
   height: 100%;
-  background: #e2e8f0;
+  background: #0f172a;
 }
 
 .gmem__frameWrap {
@@ -25,6 +25,11 @@
   min-height: 160px;
   border: 0;
   border-radius: inherit;
+}
+
+.gmem__map .maplibregl-ctrl-bottom-right {
+  bottom: 6px;
+  right: 6px;
 }
 
 .gmem__hud {
@@ -58,7 +63,7 @@
   width: 120px;
   height: 120px;
   margin: -60px 0 0 -60px;
-  border: 3px solid rgba(13, 148, 136, 0.45);
+  border: 3px solid rgba(45, 212, 191, 0.5);
   border-radius: 50%;
   animation: gmem-pulse 2.2s ease-in-out infinite;
   opacity: 0;
@@ -85,15 +90,15 @@
   padding: 0.35rem 0.55rem;
   font-size: 0.68rem;
   font-weight: 600;
-  color: #64748b;
+  color: #94a3b8;
   line-height: 1.35;
   flex-shrink: 0;
-  background: #f1f5f9;
-  border-top: 1px solid #e2e8f0;
+  background: #1e293b;
+  border-top: 1px solid #334155;
 }
 
 .gmem__openLink {
-  color: #0d9488;
+  color: #2dd4bf;
   font-weight: 700;
   text-decoration: none;
 }
@@ -111,14 +116,13 @@
   font-weight: 700;
   text-align: center;
   line-height: 1.35;
-  color: #334155;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
+  color: #cbd5e1;
+  background: #0f172a;
+  border-top: 1px solid #334155;
   flex-shrink: 0;
 }
 
 .gmem--loading,
-.gmem--noKey,
 .gmem--error {
   display: flex;
   flex-direction: column;
@@ -134,24 +138,22 @@
   margin: 0;
   font-size: 0.9rem;
   font-weight: 700;
-  color: #475569;
+  color: #94a3b8;
 }
 
-.gmem__noKeyTitle,
 .gmem__errTitle {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 800;
-  color: #0f172a;
+  color: #f1f5f9;
 }
 
-.gmem__noKeyText,
 .gmem__errText,
 .gmem__errHint {
   margin: 0;
   font-size: 0.8rem;
   line-height: 1.45;
-  color: #475569;
+  color: #94a3b8;
   max-width: 36rem;
 }
 
@@ -164,6 +166,6 @@
   font-size: 0.78em;
   padding: 0.1rem 0.35rem;
   border-radius: 6px;
-  background: #e2e8f0;
+  background: #334155;
   font-weight: 700;
 }
