@@ -1,55 +1,82 @@
-import type { ComponentType, CSSProperties } from 'react';
-import * as QrModule from 'react-qr-code';
-
-type Level = 'L' | 'M' | 'Q' | 'H';
+import { useEffect, useState } from 'react';
+import type { CSSProperties } from 'react';
+import QRCode from 'qrcode';
 
 export type SafeQRCodeProps = {
   value: string;
   size?: number;
-  level?: Level;
   style?: CSSProperties;
+  className?: string;
 };
-
-type InnerProps = {
-  value: string;
-  size?: number;
-  level?: Level;
-  style?: CSSProperties;
-};
-
-function pickQrComponent(): ComponentType<InnerProps> | null {
-  const m = QrModule as unknown as Record<string, unknown>;
-  if (typeof m.QRCode === 'function') {
-    return m.QRCode as ComponentType<InnerProps>;
-  }
-  const d = m.default;
-  if (typeof d === 'function') {
-    return d as ComponentType<InnerProps>;
-  }
-  if (d && typeof d === 'object') {
-    const nested = d as Record<string, unknown>;
-    if (typeof nested.QRCode === 'function') {
-      return nested.QRCode as ComponentType<InnerProps>;
-    }
-    if (typeof nested.default === 'function') {
-      return nested.default as ComponentType<InnerProps>;
-    }
-  }
-  return null;
-}
-
-const QrInner = pickQrComponent();
 
 /**
- * Vite + react-qr-code (CJS): default import is sometimes the module object, which triggers React error #130.
+ * Renders a QR as a PNG data URL via `qrcode` (works reliably in Vite; avoids react-qr-code CJS interop issues).
  */
-export function SafeQRCode({ value, size = 200, level = 'M', style }: SafeQRCodeProps) {
-  if (!QrInner) {
+export function SafeQRCode({ value, size = 200, style, className }: SafeQRCodeProps) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setError(null);
+    if (!value.trim()) {
+      setDataUrl(null);
+      return;
+    }
+    void QRCode.toDataURL(value, {
+      width: size,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000ff', light: '#ffffffff' },
+    })
+      .then((url) => {
+        if (!cancelled) setDataUrl(url);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setDataUrl(null);
+          setError(e instanceof Error ? e.message : 'Could not generate QR code');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value, size]);
+
+  if (error) {
     return (
-      <p className="safeQrFallback" style={style}>
-        {value}
+      <p className={`safeQrError ${className ?? ''}`.trim()} style={style}>
+        {error}
       </p>
     );
   }
-  return <QrInner value={value} size={size} level={level} style={style} />;
+
+  if (!dataUrl) {
+    return (
+      <div
+        className={`safeQrPlaceholder ${className ?? ''}`.trim()}
+        style={{
+          width: size,
+          height: size,
+          minWidth: size,
+          minHeight: size,
+          background: 'repeating-linear-gradient(-45deg, #f1f5f9, #f1f5f9 6px, #e2e8f0 6px, #e2e8f0 12px)',
+          borderRadius: 8,
+          ...style,
+        }}
+        aria-hidden
+      />
+    );
+  }
+
+  return (
+    <img
+      src={dataUrl}
+      alt="QR code — scan with your phone to open the scanner page"
+      width={size}
+      height={size}
+      className={className}
+      style={{ display: 'block', maxWidth: '100%', height: 'auto', ...style }}
+    />
+  );
 }

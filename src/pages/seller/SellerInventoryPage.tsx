@@ -728,7 +728,7 @@ export function SellerInventoryPage() {
         {scannerRelay.active && scannerRelay.scanUrl ? (
           <div className="inv__scannerQrRow">
             <div className="inv__scannerQrBox">
-              <SafeQRCode value={scannerRelay.scanUrl} size={168} level="M" />
+              <SafeQRCode value={scannerRelay.scanUrl} size={168} className="inv__qrImg" />
             </div>
             <p className="inv__scannerQrMeta">
               Scan with your phone — opens the camera page. Each scan is resolved (catalog → Open Food Facts → manual).

@@ -110,6 +110,11 @@
   border: 1px solid var(--sd-border, rgba(15, 61, 58, 0.12));
 }
 
+.inv__qrImg {
+  border-radius: 8px;
+  vertical-align: middle;
+}
+
 .inv__scannerQrMeta {
   margin: 0;
   flex: 1;
