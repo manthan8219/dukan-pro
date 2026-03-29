@@ -12,13 +12,15 @@ import {
 } from '../../api/customerDemands';
 import { registerContent } from '../../api/content';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
+import {
+  FALLBACK_MAP_CENTER,
+  getCachedDeviceCoordinates,
+  requestDeviceCoordinates,
+  rememberDeviceCoordinates,
+} from '../../geo/deviceLocation';
 import { MIN_ORDER_TO_POST_RUPEES } from '../../demands/demandsStorage';
 import '../../demands/demands.css';
 import '../customer/customer-app.css';
-
-/** Same default centre as seller onboarding (Mumbai) until GPS or the user moves the map. */
-const DEFAULT_DELIVERY_LAT = 19.076;
-const DEFAULT_DELIVERY_LNG = 72.8777;
 
 function formatInrRupees(n: number): string {
   return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}`;
@@ -50,8 +52,12 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [orderTotalInput, setOrderTotalInput] = useState('');
   const [receiptUrl, setReceiptUrl] = useState('');
   const [receiptContentId, setReceiptContentId] = useState<string | null>(null);
-  const [deliveryPinLat, setDeliveryPinLat] = useState(DEFAULT_DELIVERY_LAT);
-  const [deliveryPinLng, setDeliveryPinLng] = useState(DEFAULT_DELIVERY_LNG);
+  const [deliveryPinLat, setDeliveryPinLat] = useState(
+    () => getCachedDeviceCoordinates()?.latitude ?? FALLBACK_MAP_CENTER.latitude,
+  );
+  const [deliveryPinLng, setDeliveryPinLng] = useState(
+    () => getCachedDeviceCoordinates()?.longitude ?? FALLBACK_MAP_CENTER.longitude,
+  );
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
@@ -97,24 +103,15 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     setSearchParams(next, { replace: true });
   }, [demands, searchParams, openQuotesForDemand, setSearchParams]);
 
-  /** Best-effort: centre the map on the customer once (permission may be denied). */
+  /** Best-effort: refresh map centre from GPS when available. */
   useEffect(() => {
-    if (!navigator.geolocation) return;
     let cancelled = false;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (cancelled) return;
-        skipAccuracyResetCountRef.current = 4;
-        setDeliveryPinLat(pos.coords.latitude);
-        setDeliveryPinLng(pos.coords.longitude);
-        const acc = pos.coords.accuracy;
-        setLocAccuracyM(typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null);
-      },
-      () => {
-        /* keep default map centre */
-      },
-      { enableHighAccuracy: false, maximumAge: 60_000, timeout: 12_000 },
-    );
+    void requestDeviceCoordinates({ preferHighAccuracy: false }).then((p) => {
+      if (cancelled || !p) return;
+      skipAccuracyResetCountRef.current = 4;
+      setDeliveryPinLat(p.latitude);
+      setDeliveryPinLng(p.longitude);
+    });
     return () => {
       cancelled = true;
     };
@@ -142,6 +139,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       (pos) => {
         setDeliveryPinLat(pos.coords.latitude);
         setDeliveryPinLng(pos.coords.longitude);
+        rememberDeviceCoordinates(pos.coords.latitude, pos.coords.longitude);
         const acc = pos.coords.accuracy;
         setLocAccuracyM(typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null);
         setGeoLoading(false);

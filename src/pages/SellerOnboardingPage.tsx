@@ -11,6 +11,11 @@ import {
   setSellerOnboardingComplete,
 } from '../auth/session';
 import { GoogleMapsEmbedMapPicker } from '../components/GoogleMapsEmbedMapPicker';
+import {
+  FALLBACK_MAP_CENTER,
+  rememberDeviceCoordinates,
+  resolveDefaultMapCoordinates,
+} from '../geo/deviceLocation';
 import './SellerOnboardingPage.css';
 
 type RadiusTierDraft = { id: string; minRupee: string; maxKm: string };
@@ -18,9 +23,6 @@ type RadiusTierDraft = { id: string; minRupee: string; maxKm: string };
 function newTierDraft(): RadiusTierDraft {
   return { id: crypto.randomUUID(), minRupee: '', maxKm: '' };
 }
-
-const DEFAULT_LAT = 19.076;
-const DEFAULT_LNG = 72.8777;
 
 const WIZ_STEPS = [
   {
@@ -124,14 +126,15 @@ export function SellerOnboardingPage() {
   const [shopName, setShopName] = useState('');
   const [photoFiles, setPhotoFiles] = useState<File[]>([]);
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
-  const [latitude, setLatitude] = useState(DEFAULT_LAT);
-  const [longitude, setLongitude] = useState(DEFAULT_LNG);
+  const [latitude, setLatitude] = useState(FALLBACK_MAP_CENTER.latitude);
+  const [longitude, setLongitude] = useState(FALLBACK_MAP_CENTER.longitude);
   const [addressText, setAddressText] = useState('');
   const [geoLoading, setGeoLoading] = useState(false);
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
   /** Ignore the next N centre updates for clearing GPS accuracy (map sync + settle). */
   const skipAccuracyResetCountRef = useRef(0);
+  const pinStepGeolocationDoneRef = useRef(false);
   const [shopType, setShopType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
   const [dealIn, setDealIn] = useState<Set<string>>(() => new Set(['Groceries']));
   const [serviceRadiusKm, setServiceRadiusKm] = useState(8);
@@ -165,6 +168,23 @@ export function SellerOnboardingPage() {
         );
       }
     });
+  }, [step]);
+
+  /** Default the shop pin from the device when the user opens the map step. */
+  useEffect(() => {
+    if (step !== 2 || pinStepGeolocationDoneRef.current) return;
+    pinStepGeolocationDoneRef.current = true;
+    let cancelled = false;
+    void resolveDefaultMapCoordinates({ preferHighAccuracy: true }).then((p) => {
+      if (cancelled) return;
+      skipAccuracyResetCountRef.current = 4;
+      setLatitude(p.latitude);
+      setLongitude(p.longitude);
+    });
+    return () => {
+      cancelled = true;
+      pinStepGeolocationDoneRef.current = false;
+    };
   }, [step]);
 
   function addPhotos(files: FileList | null) {
@@ -221,6 +241,7 @@ export function SellerOnboardingPage() {
       (pos) => {
         setLatitude(pos.coords.latitude);
         setLongitude(pos.coords.longitude);
+        rememberDeviceCoordinates(pos.coords.latitude, pos.coords.longitude);
         const acc = pos.coords.accuracy;
         setLocAccuracyM(typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null);
         setGeoLoading(false);

@@ -9,6 +9,7 @@ import {
 } from '../../api/deliveryRadiusRule';
 import { fetchShop, updateShop } from '../../api/shop';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
+import { FALLBACK_MAP_CENTER, resolveDefaultMapCoordinates } from '../../geo/deviceLocation';
 import type { SellerOutletContext } from './SellerLayout';
 import './seller-shop-settings.css';
 
@@ -64,8 +65,8 @@ export function SellerShopSettingsPage() {
   const [displayName, setDisplayName] = useState('');
   const [billingName, setBillingName] = useState('');
   const [addressText, setAddressText] = useState('');
-  const [latitude, setLatitude] = useState(19.076);
-  const [longitude, setLongitude] = useState(72.8777);
+  const [latitude, setLatitude] = useState(FALLBACK_MAP_CENTER.latitude);
+  const [longitude, setLongitude] = useState(FALLBACK_MAP_CENTER.longitude);
   const skipAccuracyResetCountRef = useRef(0);
   const [shopType, setShopType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
   const [dealIn, setDealIn] = useState<Set<string>>(() => new Set());
@@ -99,10 +100,22 @@ export function SellerShopSettingsPage() {
         setAddressText(shop.location.addressText ?? '');
         const lat = shop.location.coordinates.latitude;
         const lng = shop.location.coordinates.longitude;
-        if (typeof lat === 'number' && typeof lng === 'number') {
+        const hasServerPin =
+          typeof lat === 'number' &&
+          typeof lng === 'number' &&
+          Number.isFinite(lat) &&
+          Number.isFinite(lng);
+        if (hasServerPin) {
           skipAccuracyResetCountRef.current += 1;
           setLatitude(lat);
           setLongitude(lng);
+        } else {
+          void resolveDefaultMapCoordinates({ preferHighAccuracy: true }).then((p) => {
+            if (cancelled) return;
+            skipAccuracyResetCountRef.current += 1;
+            setLatitude(p.latitude);
+            setLongitude(p.longitude);
+          });
         }
         setShopType(shop.offering.shopType === 'WHOLESALE' ? 'WHOLESALE' : 'RETAIL');
         setDealIn(new Set(shop.offering.dealIn.length ? shop.offering.dealIn : ['Groceries']));

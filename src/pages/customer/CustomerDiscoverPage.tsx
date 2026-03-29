@@ -3,6 +3,11 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { fetchDiscoverableShops, type ShopNearbySummary } from '../../api/shop';
 import {
+  FALLBACK_MAP_CENTER,
+  getCachedDeviceCoordinates,
+  requestDeviceCoordinates,
+} from '../../geo/deviceLocation';
+import {
   DEFAULT_SHOP_FILTERS,
   type ShopCategory,
   type ShopFilters,
@@ -76,7 +81,8 @@ export function CustomerDiscoverPage() {
       setLoadError(null);
       setGeoHint(null);
 
-      const finishGeo = (lat: number, lng: number) => {
+      const finishGeo = (lat: number, lng: number, hint: string | null) => {
+        if (hint !== null) setGeoHint(hint);
         void (async () => {
           if (cancelled) return;
           try {
@@ -93,27 +99,25 @@ export function CustomerDiscoverPage() {
         })();
       };
 
-      if (!navigator.geolocation) {
-        setGeoHint('Turn on location in your browser, or open this app on a phone that supports GPS.');
-        setLoading(false);
-        setShops([]);
+      const live = await requestDeviceCoordinates({ preferHighAccuracy: false });
+      if (cancelled) return;
+      if (live) {
+        finishGeo(live.latitude, live.longitude, null);
         return;
       }
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          if (cancelled) return;
-          finishGeo(pos.coords.latitude, pos.coords.longitude);
-        },
-        () => {
-          if (cancelled) return;
-          setGeoHint(
-            'Allow location access to see shops that deliver to you — we match your position to each shop’s delivery radius.',
-          );
-          setLoading(false);
-          setShops([]);
-        },
-        { enableHighAccuracy: false, maximumAge: 60_000, timeout: 15_000 },
+      const cached = getCachedDeviceCoordinates();
+      if (cached) {
+        finishGeo(
+          cached.latitude,
+          cached.longitude,
+          'Using a recent location on this device — allow location for live accuracy.',
+        );
+        return;
+      }
+      finishGeo(
+        FALLBACK_MAP_CENTER.latitude,
+        FALLBACK_MAP_CENTER.longitude,
+        'Location unavailable — showing a default area. Allow location to see shops near you.',
       );
     }
 
