@@ -1,0 +1,169 @@
+/* Google Maps JS API: centre-pin HUD over draggable map */
+
+.gmem {
+  position: relative;
+  width: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  height: 100%;
+  background: #e2e8f0;
+}
+
+.gmem__frameWrap {
+  position: relative;
+  flex: 1;
+  min-height: 160px;
+  width: 100%;
+}
+
+.gmem__map {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+  border: 0;
+  border-radius: inherit;
+}
+
+.gmem__hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gmem__pin {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 28px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+}
+
+.gmem__pinSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.gmem__ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border: 3px solid rgba(13, 148, 136, 0.45);
+  border-radius: 50%;
+  animation: gmem-pulse 2.2s ease-in-out infinite;
+  opacity: 0;
+}
+
+.gmem__ring--on {
+  opacity: 1;
+}
+
+@keyframes gmem-pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.2;
+  }
+}
+
+.gmem__openRow {
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.35;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  border-top: 1px solid #e2e8f0;
+}
+
+.gmem__openLink {
+  color: #0d9488;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.gmem__openLink:hover {
+  text-decoration: underline;
+}
+
+.gmem__hint {
+  margin: 0;
+  padding: 0.35rem 0.65rem 0.45rem;
+  z-index: 3;
+  max-width: 100%;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.35;
+  color: #334155;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.gmem--loading,
+.gmem--noKey,
+.gmem--error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1rem;
+  text-align: center;
+  min-height: 200px;
+}
+
+.gmem__loadingText {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.gmem__noKeyTitle,
+.gmem__errTitle {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.gmem__noKeyText,
+.gmem__errText,
+.gmem__errHint {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #475569;
+  max-width: 36rem;
+}
+
+.gmem__errHint {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.gmem__code {
+  font-size: 0.78em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: #e2e8f0;
+  font-weight: 700;
+}

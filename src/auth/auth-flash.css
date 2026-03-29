@@ -1,0 +1,88 @@
+.authFlash__root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10050;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: max(0.75rem, env(safe-area-inset-top)) 0.75rem 0;
+}
+
+.authFlash {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  max-width: 440px;
+  width: 100%;
+  padding: 0.95rem 1rem 0.95rem 1.1rem;
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+  border: 1px solid transparent;
+}
+
+.authFlash--error {
+  background: linear-gradient(180deg, #fff5f5 0%, #ffe4e6 100%);
+  border-color: #fda4af;
+  color: #9f1239;
+}
+
+.authFlash--success {
+  background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+  border-color: #6ee7b7;
+  color: #065f46;
+}
+
+.authFlash--info {
+  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.authFlash__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.authFlash__title {
+  margin: 0 0 0.3rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.authFlash__text {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.authFlash__x {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  margin: -0.15rem -0.25rem -0.15rem 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.06);
+  color: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.75;
+  transition:
+    background 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.authFlash__x:hover {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.1);
+}
