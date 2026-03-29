@@ -234,6 +234,10 @@
   }
 }
 
+.dm__mapPick {
+  margin: 0.35rem 0 0.5rem;
+}
+
 .dm__empty {
   text-align: center;
   padding: 1.5rem;

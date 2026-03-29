@@ -9,7 +9,13 @@ import {
 } from '../../api/deliveryRadiusRule';
 import { fetchShop, updateShop } from '../../api/shop';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
-import { FALLBACK_MAP_CENTER, resolveDefaultMapCoordinates } from '../../geo/deviceLocation';
+import { MapPinAddressSelect } from '../../components/map/MapPinAddressSelect';
+import {
+  FALLBACK_MAP_CENTER,
+  rememberDeviceCoordinates,
+  resolveDefaultMapCoordinates,
+} from '../../geo/deviceLocation';
+import type { MapLocateEvent } from '../../components/map';
 import type { SellerOutletContext } from './SellerLayout';
 import './seller-shop-settings.css';
 
@@ -81,6 +87,14 @@ export function SellerShopSettingsPage() {
       skipAccuracyResetCountRef.current -= 1;
       return;
     }
+  }, []);
+
+  const onShopMapDeviceLocation = useCallback((ev: MapLocateEvent) => {
+    if (ev.kind !== 'success') return;
+    skipAccuracyResetCountRef.current = 4;
+    setLatitude(ev.latitude);
+    setLongitude(ev.longitude);
+    rememberDeviceCoordinates(ev.latitude, ev.longitude);
   }, []);
 
   useEffect(() => {
@@ -354,15 +368,26 @@ export function SellerShopSettingsPage() {
         />
 
         <p className="sshop__label">Shop pin</p>
+        <p className="sshop__hint" style={{ marginTop: '-0.2rem' }}>
+          Drag the map so the centre pin is on your shop, or tap <strong>Use my location</strong> on the map.
+        </p>
         <GoogleMapsEmbedMapPicker
           latitude={latitude}
           longitude={longitude}
           onCenterChange={onMapCenterChange}
           className="sshop__map"
+          onDeviceLocation={onShopMapDeviceLocation}
         />
-        <p className="sshop__coords" title="Map centre">
-          {latitude.toFixed(5)}, {longitude.toFixed(5)}
-        </p>
+        <MapPinAddressSelect
+          className="sshop__mapPick"
+          variant="sshop"
+          latitude={latitude}
+          longitude={longitude}
+          locationConfirmed={false}
+          confirmedLabel=""
+          onSelectLocation={() => {}}
+          showSelectButton={false}
+        />
 
         <p className="sshop__label">Shop type</p>
         <div className="sshop__segRow">

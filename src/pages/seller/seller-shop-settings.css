@@ -72,6 +72,10 @@
   border: 1px solid var(--sd-border, rgba(15, 61, 58, 0.12));
 }
 
+.sshop__mapPick {
+  margin: 0.5rem 0 0;
+}
+
 .sshop__coords {
   font-size: 0.78rem;
   color: var(--sd-muted, #64748b);

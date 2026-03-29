@@ -11,6 +11,8 @@ import {
   setSellerOnboardingComplete,
 } from '../auth/session';
 import { GoogleMapsEmbedMapPicker } from '../components/GoogleMapsEmbedMapPicker';
+import type { MapLocateEvent } from '../components/map';
+import { MapPinAddressSelect } from '../components/map/MapPinAddressSelect';
 import {
   FALLBACK_MAP_CENTER,
   rememberDeviceCoordinates,
@@ -128,8 +130,9 @@ export function SellerOnboardingPage() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [latitude, setLatitude] = useState(FALLBACK_MAP_CENTER.latitude);
   const [longitude, setLongitude] = useState(FALLBACK_MAP_CENTER.longitude);
+  const [pinLocationConfirmed, setPinLocationConfirmed] = useState(false);
+  const [pinLocationLabel, setPinLocationLabel] = useState('');
   const [addressText, setAddressText] = useState('');
-  const [geoLoading, setGeoLoading] = useState(false);
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
   /** Ignore the next N centre updates for clearing GPS accuracy (map sync + settle). */
@@ -149,11 +152,48 @@ export function SellerOnboardingPage() {
   const onMapCenterChange = useCallback((lat: number, lng: number) => {
     setLatitude(lat);
     setLongitude(lng);
+    setPinLocationConfirmed(false);
     if (skipAccuracyResetCountRef.current > 0) {
       skipAccuracyResetCountRef.current -= 1;
       return;
     }
     setLocAccuracyM(null);
+  }, []);
+
+  const onMapDeviceLocation = useCallback((ev: MapLocateEvent) => {
+    if (ev.kind === 'request') {
+      setGeoHint('Your browser will ask for location permission — choose “Allow” to jump the map to you.');
+      return;
+    }
+    if (ev.kind === 'success') {
+      skipAccuracyResetCountRef.current = 4;
+      setPinLocationConfirmed(false);
+      setLatitude(ev.latitude);
+      setLongitude(ev.longitude);
+      rememberDeviceCoordinates(ev.latitude, ev.longitude);
+      setLocAccuracyM(ev.accuracyMeters);
+      setGeoHint(
+        'Got it — map centred on you. Fine-tune by dragging the map if you’re not exactly at the shop counter.',
+      );
+      return;
+    }
+    skipAccuracyResetCountRef.current = 0;
+    setLocAccuracyM(null);
+    if (ev.code === 'unsupported') {
+      setGeoHint('This browser does not expose GPS. Drag the map so the centre pin sits on your shop.');
+      return;
+    }
+    if (ev.code === 1) {
+      setGeoHint(
+        'Permission denied. Click the lock/site icon in the address bar → allow location — or drag the map to your shop.',
+      );
+    } else if (ev.code === 2) {
+      setGeoHint('Position unavailable (weak GPS or indoors). Drag the map to the correct spot.');
+    } else if (ev.code === 3) {
+      setGeoHint('Location timed out. Try again near a window or drag the map manually.');
+    } else {
+      setGeoHint('Could not read location. Drag the map so the pin is on your shop.');
+    }
   }, []);
 
   useEffect(() => {
@@ -229,51 +269,16 @@ export function SellerOnboardingPage() {
     setRadiusTiers((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
   }
 
-  function useCurrentLocation() {
-    if (!navigator.geolocation) {
-      setGeoHint('This browser does not expose GPS. Drag the map so the centre pin sits on your shop.');
-      return;
-    }
-    setGeoLoading(true);
-    setGeoHint('Your browser will ask for location permission — choose “Allow” for the best coordinates.');
-    skipAccuracyResetCountRef.current = 4;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
-        rememberDeviceCoordinates(pos.coords.latitude, pos.coords.longitude);
-        const acc = pos.coords.accuracy;
-        setLocAccuracyM(typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null);
-        setGeoLoading(false);
-        setGeoHint(
-          'Got it — map centred on you. Fine-tune by dragging the map if you’re not exactly at the shop counter.',
-        );
-      },
-      (err) => {
-        setGeoLoading(false);
-        skipAccuracyResetCountRef.current = 0;
-        setLocAccuracyM(null);
-        const code = err?.code;
-        if (code === 1) {
-          setGeoHint(
-            'Permission denied. Click the lock/site icon in the address bar → allow location — or drag the map to your shop.',
-          );
-        } else if (code === 2) {
-          setGeoHint('Position unavailable (weak GPS or indoors). Drag the map to the correct spot.');
-        } else if (code === 3) {
-          setGeoHint('Location timed out. Try again near a window or drag the map manually.');
-        } else {
-          setGeoHint('Could not read location. Drag the map so the pin is on your shop.');
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 18_000 },
-    );
-  }
-
   function canAdvance(): boolean {
     if (step === 0) return shopName.trim().length >= 2;
     if (step === 1) return true;
-    if (step === 2) return Number.isFinite(latitude) && Number.isFinite(longitude);
+    if (step === 2) {
+      return (
+        pinLocationConfirmed &&
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude)
+      );
+    }
     if (step === 3) return dealIn.size >= 1;
     if (step === 4) {
       if (radiusTiers.length === 0) return true;
@@ -542,22 +547,20 @@ export function SellerOnboardingPage() {
               <div className="wiz__cardInner">
                 <p className="wiz__geoCallout">
                   The <strong>teal pin stays in the middle</strong> — <strong>drag the map</strong> underneath it (finger or mouse).
-                  Use <strong>GPS</strong> for a quick jump, then zoom in for an exact doorstep.
+                  Tap <strong>Use my location</strong> on the map for GPS, then zoom in for an exact doorstep.
                 </p>
-                <div className="wiz__geoRow">
-                  <motion.button
-                    type="button"
-                    className="wiz__btn wiz__btn--primary"
-                    disabled={geoLoading}
-                    onClick={useCurrentLocation}
-                    whileTap={{ scale: 0.96 }}
-                  >
-                    {geoLoading ? 'Waiting for GPS…' : '🛰️ Use my location (permission)'}
-                  </motion.button>
-                  <span className="wiz__coords" title="Centre of the map (your shop pin)">
-                    {latitude.toFixed(6)}, {longitude.toFixed(6)}
-                  </span>
-                </div>
+                <MapPinAddressSelect
+                  className="wiz__mapPick"
+                  variant="wiz"
+                  latitude={latitude}
+                  longitude={longitude}
+                  locationConfirmed={pinLocationConfirmed}
+                  confirmedLabel={pinLocationLabel}
+                  onSelectLocation={(label) => {
+                    setPinLocationLabel(label);
+                    setPinLocationConfirmed(true);
+                  }}
+                />
                 {geoHint ? <p className="wiz__hint">{geoHint}</p> : null}
                 <GoogleMapsEmbedMapPicker
                   className="wiz__map"
@@ -565,6 +568,8 @@ export function SellerOnboardingPage() {
                   longitude={longitude}
                   accuracyMeters={locAccuracyM}
                   onCenterChange={onMapCenterChange}
+                  useMyLocationLabel="🛰️ Use my location"
+                  onDeviceLocation={onMapDeviceLocation}
                 />
                 <label className="wiz__fieldLabel" htmlFor="addr">
                   Address (optional)
@@ -768,11 +773,9 @@ export function SellerOnboardingPage() {
                     <span>Shop</span>
                     <strong>{shopName.trim() || '—'}</strong>
                   </div>
-                  <div className="wiz__summaryRow">
+                  <div className="wiz__summaryRow wiz__summaryRow--block">
                     <span>Pin</span>
-                    <strong>
-                      {latitude.toFixed(5)}, {longitude.toFixed(5)}
-                    </strong>
+                    <strong>{pinLocationLabel.trim() || '—'}</strong>
                   </div>
                   <div className="wiz__summaryRow">
                     <span>Vibe</span>

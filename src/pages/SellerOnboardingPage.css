@@ -580,6 +580,11 @@
   margin-bottom: 0.4rem;
 }
 
+.wiz__mapPick {
+  width: 100%;
+  margin-bottom: 0.65rem;
+}
+
 .wiz__coords {
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;

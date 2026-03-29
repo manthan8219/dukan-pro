@@ -55,3 +55,38 @@ export async function searchPlaces(query: string): Promise<GeocodeHit[]> {
   if (key) return searchLocationIq(query, key);
   return searchNominatim(query);
 }
+
+async function reverseNominatim(lat: number, lng: number): Promise<string | null> {
+  const url = new URL('https://nominatim.openstreetmap.org/reverse');
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
+  url.searchParams.set('format', 'json');
+  const res = await fetch(url.toString(), {
+    headers: { Accept: 'application/json', 'Accept-Language': 'en', 'User-Agent': NOMINATIM_UA },
+  });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { display_name?: string; error?: string };
+  if (j.error) return null;
+  const name = j.display_name?.trim();
+  return name || null;
+}
+
+async function reverseLocationIq(lat: number, lng: number, apiKey: string): Promise<string | null> {
+  const url = new URL('https://us1.locationiq.com/v1/reverse.php');
+  url.searchParams.set('key', apiKey);
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
+  url.searchParams.set('format', 'json');
+  const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+  if (!res.ok) return null;
+  const j = (await res.json()) as { display_name?: string };
+  return j.display_name?.trim() || null;
+}
+
+/** Human-readable place name for map centre (debounce calls in UI). */
+export async function reverseGeocode(latitude: number, longitude: number): Promise<string | null> {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  const key = String(import.meta.env.VITE_LOCATIONIQ_API_KEY ?? '').trim();
+  if (key) return reverseLocationIq(latitude, longitude, key);
+  return reverseNominatim(latitude, longitude);
+}

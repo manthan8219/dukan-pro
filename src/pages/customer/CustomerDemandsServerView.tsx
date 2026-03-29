@@ -12,6 +12,8 @@ import {
 } from '../../api/customerDemands';
 import { registerContent } from '../../api/content';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
+import type { MapLocateEvent } from '../../components/map';
+import { MapPinAddressSelect } from '../../components/map/MapPinAddressSelect';
 import {
   FALLBACK_MAP_CENTER,
   getCachedDeviceCoordinates,
@@ -58,10 +60,11 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [deliveryPinLng, setDeliveryPinLng] = useState(
     () => getCachedDeviceCoordinates()?.longitude ?? FALLBACK_MAP_CENTER.longitude,
   );
-  const [geoLoading, setGeoLoading] = useState(false);
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
   const skipAccuracyResetCountRef = useRef(0);
+  const [deliveryLocationConfirmed, setDeliveryLocationConfirmed] = useState(false);
+  const [deliveryLocationLabel, setDeliveryLocationLabel] = useState('');
 
   const [quotesOpenFor, setQuotesOpenFor] = useState<string | null>(null);
   const [quotes, setQuotes] = useState<CustomerDemandQuotation[]>([]);
@@ -120,6 +123,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const onDeliveryMapCenterChange = useCallback((lat: number, lng: number) => {
     setDeliveryPinLat(lat);
     setDeliveryPinLng(lng);
+    setDeliveryLocationConfirmed(false);
     if (skipAccuracyResetCountRef.current > 0) {
       skipAccuracyResetCountRef.current -= 1;
       return;
@@ -127,42 +131,37 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     setLocAccuracyM(null);
   }, []);
 
-  function useMyLocationForDelivery() {
-    if (!navigator.geolocation) {
+  const onDeliveryMapDeviceLocation = useCallback((ev: MapLocateEvent) => {
+    if (ev.kind === 'request') {
+      setGeoHint('Allow location when prompted — we only use it to centre this map.');
+      return;
+    }
+    if (ev.kind === 'success') {
+      skipAccuracyResetCountRef.current = 4;
+      setDeliveryLocationConfirmed(false);
+      setDeliveryPinLat(ev.latitude);
+      setDeliveryPinLng(ev.longitude);
+      rememberDeviceCoordinates(ev.latitude, ev.longitude);
+      setLocAccuracyM(ev.accuracyMeters);
+      setGeoHint('Map centred on you — drag to fine-tune the exact drop point.');
+      return;
+    }
+    skipAccuracyResetCountRef.current = 0;
+    setLocAccuracyM(null);
+    if (ev.code === 'unsupported') {
       setGeoHint('This browser does not support GPS. Drag the map so the pin is on your delivery address.');
       return;
     }
-    setGeoLoading(true);
-    setGeoHint('Allow location when prompted — we only use it to centre this map.');
-    skipAccuracyResetCountRef.current = 4;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setDeliveryPinLat(pos.coords.latitude);
-        setDeliveryPinLng(pos.coords.longitude);
-        rememberDeviceCoordinates(pos.coords.latitude, pos.coords.longitude);
-        const acc = pos.coords.accuracy;
-        setLocAccuracyM(typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null);
-        setGeoLoading(false);
-        setGeoHint('Map centred on you — drag to fine-tune the exact drop point.');
-      },
-      (err) => {
-        setGeoLoading(false);
-        skipAccuracyResetCountRef.current = 0;
-        setLocAccuracyM(null);
-        const code = err?.code;
-        if (code === 1) {
-          setGeoHint('Location blocked. Allow it in the browser lock icon, or drag the map manually.');
-        } else if (code === 2) {
-          setGeoHint('Position unavailable. Drag the map to your delivery point.');
-        } else if (code === 3) {
-          setGeoHint('Location timed out. Try again or drag the map.');
-        } else {
-          setGeoHint('Could not read location. Drag the map to your delivery address.');
-        }
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 18_000 },
-    );
-  }
+    if (ev.code === 1) {
+      setGeoHint('Location blocked. Allow it in the browser lock icon, or drag the map manually.');
+    } else if (ev.code === 2) {
+      setGeoHint('Position unavailable. Drag the map to your delivery point.');
+    } else if (ev.code === 3) {
+      setGeoHint('Location timed out. Try again or drag the map.');
+    } else {
+      setGeoHint('Could not read location. Drag the map to your delivery address.');
+    }
+  }, []);
 
   const orderTotalNum = useMemo(() => {
     const t = orderTotalInput.trim().replace(/,/g, '');
@@ -177,7 +176,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     title.trim().length > 0 &&
     details.trim().length > 0 &&
     orderMeetsMin &&
-    Boolean(receiptContentId);
+    Boolean(receiptContentId) &&
+    deliveryLocationConfirmed;
 
   async function onRegisterReceiptUrl() {
     setFormError(null);
@@ -223,6 +223,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       setOrderTotalInput('');
       setReceiptUrl('');
       setReceiptContentId(null);
+      setDeliveryLocationConfirmed(false);
+      setDeliveryLocationLabel('');
       refresh();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Create failed');
@@ -236,7 +238,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     const lat = d.deliveryLatitude ?? deliveryPinLat;
     const lng = d.deliveryLongitude ?? deliveryPinLng;
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      setFormError('Set the delivery point on the map (or open the draft after saving coordinates) before publishing.');
+      setFormError('Set the delivery point on the map before publishing.');
       return;
     }
     setBusy(true);
@@ -353,7 +355,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
 
         <p className="dm__label">Delivery location (map)</p>
         <p className="dm__hint" style={{ marginTop: '-0.35rem', marginBottom: '0.5rem' }}>
-          Drag the map so the centre pin sits on your door or lane — we use that point to match shop delivery circles.
+          Use <strong>Use my location</strong> on the map or drag so the centre pin sits on your door or lane — we use that
+          point to match shop delivery circles.
         </p>
         <div
           className="cust__mapWrap"
@@ -374,24 +377,22 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
             initialZoom={16}
             mapAriaLabel="Map: drag so the centre pin is on your delivery address"
             hintText="Drag the map — pin marks delivery point · pinch or controls to zoom"
+            onDeviceLocation={onDeliveryMapDeviceLocation}
           />
         </div>
-        <div className="dm__row2" style={{ marginBottom: '0.5rem' }}>
-          <button
-            type="button"
-            className="dm__btn dm__btn--ghost"
-            style={{ marginBottom: 0 }}
-            disabled={busy || geoLoading}
-            onClick={() => useMyLocationForDelivery()}
-          >
-            {geoLoading ? 'Locating…' : 'Use my location'}
-          </button>
-          <p className="dm__hint" style={{ margin: 0, alignSelf: 'center' }}>
-            <code className="cust__code">
-              {deliveryPinLat.toFixed(6)}, {deliveryPinLng.toFixed(6)}
-            </code>
-          </p>
-        </div>
+        <MapPinAddressSelect
+          className="dm__mapPick"
+          variant="dm"
+          latitude={deliveryPinLat}
+          longitude={deliveryPinLng}
+          locationConfirmed={deliveryLocationConfirmed}
+          confirmedLabel={deliveryLocationLabel}
+          onSelectLocation={(label) => {
+            setDeliveryLocationLabel(label);
+            setDeliveryLocationConfirmed(true);
+          }}
+          selectButtonText="Select delivery location"
+        />
         {geoHint ? <p className="dm__hint">{geoHint}</p> : null}
 
         <label className="dm__label" htmlFor={titleId}>

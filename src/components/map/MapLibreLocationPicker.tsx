@@ -6,6 +6,12 @@ import { ensureMapLibreWorker } from './ensureMapLibreWorker';
 import './MapLibreLocationPicker.css';
 import { MAP_STYLE_DARK_VECTOR } from './mapStyle';
 
+/** Fired when the user taps “Use my location” so parents can set hints, accuracy ring, cache, etc. */
+export type MapLocateEvent =
+  | { kind: 'request' }
+  | { kind: 'success'; latitude: number; longitude: number; accuracyMeters: number | null }
+  | { kind: 'error'; code: 1 | 2 | 3 | 'unsupported' };
+
 export type MapLibreLocationPickerProps = {
   latitude: number;
   longitude: number;
@@ -15,6 +21,12 @@ export type MapLibreLocationPickerProps = {
   initialZoom?: number;
   hintText?: string;
   mapAriaLabel?: string;
+  /** Show a GPS button above the map (default true). */
+  showUseMyLocationButton?: boolean;
+  /** Label for the GPS button. */
+  useMyLocationLabel?: string;
+  /** Optional hook for hints, `rememberDeviceCoordinates`, accuracy circle, skip-ref logic, etc. */
+  onDeviceLocation?: (event: MapLocateEvent) => void;
 };
 
 function clampZoom(z: number): number {
@@ -39,15 +51,21 @@ export function MapLibreLocationPicker({
   initialZoom = 16,
   hintText = 'Drag the map — pin stays in the centre · pinch or buttons to zoom',
   mapAriaLabel = 'Map: drag so the pin is on your location',
+  showUseMyLocationButton = true,
+  useMyLocationLabel = 'Use my location',
+  onDeviceLocation,
 }: MapLibreLocationPickerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const suppressEmitRef = useRef(true);
   const onCenterChangeRef = useRef(onCenterChange);
   onCenterChangeRef.current = onCenterChange;
+  const onDeviceLocationRef = useRef(onDeviceLocation);
+  onDeviceLocationRef.current = onDeviceLocation;
   const rafRef = useRef<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [locateLoading, setLocateLoading] = useState(false);
 
   const emitCenter = useCallback(() => {
     if (suppressEmitRef.current) return;
@@ -186,6 +204,52 @@ export function MapLibreLocationPicker({
     [latitude, longitude, initialZoom],
   );
 
+  const onUseMyLocation = useCallback(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (!navigator.geolocation) {
+      onDeviceLocationRef.current?.({ kind: 'error', code: 'unsupported' });
+      return;
+    }
+    setLocateLoading(true);
+    onDeviceLocationRef.current?.({ kind: 'request' });
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const acc = pos.coords.accuracy;
+        const accuracyMeters =
+          typeof acc === 'number' && Number.isFinite(acc) && acc > 0 ? acc : null;
+        onDeviceLocationRef.current?.({
+          kind: 'success',
+          latitude: lat,
+          longitude: lng,
+          accuracyMeters,
+        });
+        const map = mapRef.current;
+        if (map) {
+          suppressEmitRef.current = true;
+          const z = Math.max(map.getZoom(), clampZoom(initialZoom));
+          map.jumpTo({ center: [lng, lat], zoom: z });
+          map.once('idle', () => {
+            onCenterChangeRef.current(lat, lng);
+            suppressEmitRef.current = false;
+          });
+        }
+        setLocateLoading(false);
+      },
+      (err) => {
+        setLocateLoading(false);
+        const code = err?.code;
+        if (code === 1 || code === 2 || code === 3) {
+          onDeviceLocationRef.current?.({ kind: 'error', code });
+        } else {
+          onDeviceLocationRef.current?.({ kind: 'error', code: 2 });
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 18_000 },
+    );
+  }, [initialZoom, mapReady]);
+
   if (loadError) {
     return (
       <div className={`gmem gmem--error ${className ?? ''}`} role="alert">
@@ -198,6 +262,18 @@ export function MapLibreLocationPicker({
 
   return (
     <div className={`gmem ${className ?? ''}`}>
+      {showUseMyLocationButton ? (
+        <div className="gmem__toolbar">
+          <button
+            type="button"
+            className="gmem__locateBtn"
+            disabled={!mapReady || locateLoading}
+            onClick={onUseMyLocation}
+          >
+            {locateLoading ? 'Locating…' : useMyLocationLabel}
+          </button>
+        </div>
+      ) : null}
       <div className="gmem__frameWrap">
         <div ref={wrapRef} className="gmem__map" role="application" aria-label={mapAriaLabel} />
         {!mapReady ? (

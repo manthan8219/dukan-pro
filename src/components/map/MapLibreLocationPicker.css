@@ -12,6 +12,37 @@
   background: #0f172a;
 }
 
+.gmem__toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.gmem__locateBtn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  background: #0d9488;
+  color: #ecfdf5;
+}
+
+.gmem__locateBtn:hover:not(:disabled) {
+  background: #14b8a6;
+}
+
+.gmem__locateBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .gmem__frameWrap {
   position: relative;
   flex: 1;
