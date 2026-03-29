@@ -1,13 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
+import type { DeliveryAddress, SavedAddress } from './customerDeliveryTypes';
 import { useCustomerCart } from './cartContext';
-import type { DeliveryAddress, SavedAddress } from './customerDeliveryStorage';
-import {
-  getSelectedSavedAddress,
-  loadDeliveryAddress,
-  saveDeliveryAddress,
-  updateSavedAddress,
-} from './customerDeliveryStorage';
 
 const DELIVERY_FEE = 40;
 const FREE_ABOVE = 499;
@@ -26,38 +21,41 @@ function stripSaved(s: SavedAddress): DeliveryAddress {
 export function CustomerCheckoutPage() {
   const navigate = useNavigate();
   const { lines, subtotal } = useCustomerCart();
-  const [selectedId, setSelectedId] = useState<string | null>(() => getSelectedSavedAddress()?.id ?? null);
-  const [addr, setAddr] = useState<DeliveryAddress>(() => {
-    const s = getSelectedSavedAddress();
-    return s ? stripSaved(s) : loadDeliveryAddress();
+  const { book, updateSavedAddress, saveDeliveryAddress } = useCustomerDeliveryAddresses();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addr, setAddr] = useState<DeliveryAddress>({
+    fullName: '',
+    phone: '',
+    line1: '',
+    line2: '',
+    landmark: '',
+    city: '',
+    pin: '',
   });
+
+  useEffect(() => {
+    const sel = book.selectedId
+      ? book.addresses.find((a) => a.id === book.selectedId)
+      : book.addresses[0];
+    if (sel) {
+      setSelectedId(sel.id);
+      setAddr(stripSaved(sel));
+    }
+  }, [book]);
 
   const fee = useMemo(() => (subtotal >= FREE_ABOVE ? 0 : DELIVERY_FEE), [subtotal]);
   const total = subtotal + fee;
   const canPay = lines.length > 0 && addressComplete(addr);
 
-  useEffect(() => {
-    const sync = () => {
-      const s = getSelectedSavedAddress();
-      if (s) {
-        setSelectedId(s.id);
-        setAddr(stripSaved(s));
-      }
-    };
-    window.addEventListener('dukaanpro-delivery-updated', sync);
-    return () => window.removeEventListener('dukaanpro-delivery-updated', sync);
-  }, []);
-
   function update<K extends keyof DeliveryAddress>(key: K, value: DeliveryAddress[K]) {
     setAddr((prev) => ({ ...prev, [key]: value }));
   }
 
-  function persistAndGoPayment() {
+  async function persistAndGoPayment() {
     if (selectedId) {
-      updateSavedAddress(selectedId, addr);
+      await updateSavedAddress(selectedId, addr);
     } else {
-      saveDeliveryAddress(addr);
-      setSelectedId(getSelectedSavedAddress()?.id ?? null);
+      await saveDeliveryAddress(addr);
     }
     navigate('/app/customer/checkout/payment');
   }
@@ -194,7 +192,7 @@ export function CustomerCheckoutPage() {
         type="button"
         className="cust__btn cust__btn--primary cust__btn--block"
         disabled={!canPay}
-        onClick={persistAndGoPayment}
+        onClick={() => void persistAndGoPayment()}
       >
         Choose payment
       </button>

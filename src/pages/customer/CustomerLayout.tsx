@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import type { BackendSession } from '../../api/authSync';
 import { NotificationBell } from '../../components/NotificationBell';
 import { useCustomerDemandAttentionCount } from '../../hooks/useCustomerDemandAttentionCount';
 import { useAuth } from '../../auth/AuthContext';
-import { deliverySummaryLineFromSaved, getSelectedSavedAddress } from './customerDeliveryStorage';
+import { CustomerDeliveryAddressesProvider, useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
+import { deliverySummaryLineFromSaved } from './customerDeliveryTypes';
 import { CustomerCartProvider, useCustomerCart } from './cartContext';
 import './customer-app.css';
 
@@ -40,16 +41,14 @@ function CustomerShell({ children }: { children: ReactNode }) {
     backendProfile?.id ?? null,
     demandsRouteActive,
   );
-  const [deliveryBump, bumpDelivery] = useState(0);
-  useEffect(() => {
-    const onUpd = () => bumpDelivery((n) => n + 1);
-    window.addEventListener('dukaanpro-delivery-updated', onUpd);
-    return () => window.removeEventListener('dukaanpro-delivery-updated', onUpd);
-  }, []);
   const pageTitle = useMemo(() => titleFromPath(location.pathname), [location.pathname]);
+  const { getSelectedSavedAddress, loading: deliveryLoading } = useCustomerDeliveryAddresses();
   const selectedAddr = getSelectedSavedAddress();
-  const deliveryLine = selectedAddr ? deliverySummaryLineFromSaved(selectedAddr) : 'Add delivery address';
-  void deliveryBump;
+  const deliveryLine = deliveryLoading
+    ? 'Loading…'
+    : selectedAddr
+      ? deliverySummaryLineFromSaved(selectedAddr)
+      : 'Add delivery address';
 
   return (
     <div className="cust">
@@ -202,7 +201,9 @@ export function CustomerRouteShell({ children }: { children: ReactNode }) {
   }
   return (
     <CustomerCartProvider>
-      <CustomerShell>{children}</CustomerShell>
+      <CustomerDeliveryAddressesProvider userId={backendProfile.id}>
+        <CustomerShell>{children}</CustomerShell>
+      </CustomerDeliveryAddressesProvider>
     </CustomerCartProvider>
   );
 }

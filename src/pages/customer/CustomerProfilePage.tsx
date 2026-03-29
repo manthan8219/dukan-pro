@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { loadCustomerProfile, saveCustomerProfile } from './customerProfileStorage';
-import { deliverySummaryLineFromSaved, getSelectedSavedAddress } from './customerDeliveryStorage';
+import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
+import { deliverySummaryLineFromSaved } from './customerDeliveryTypes';
 
 function initials(name: string, fallback: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -15,6 +16,7 @@ export function CustomerProfilePage() {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const userId = user?.uid ?? null;
+  const { getSelectedSavedAddress } = useCustomerDeliveryAddresses();
   const savedAddr = getSelectedSavedAddress();
   const [name, setName] = useState(() => loadCustomerProfile().displayName || user?.displayName || '');
   const [email, setEmail] = useState(() => loadCustomerProfile().email || user?.email || '');

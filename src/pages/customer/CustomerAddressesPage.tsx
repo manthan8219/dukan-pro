@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { AddressTag, DeliveryAddress, SavedAddress } from './customerDeliveryStorage';
-import {
-  addSavedAddress,
-  deliverySummaryLine,
-  loadAddressBook,
-  removeSavedAddress,
-  setSelectedAddressId,
-  updateSavedAddress,
-} from './customerDeliveryStorage';
+import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
+import type { AddressTag, DeliveryAddress, SavedAddress } from './customerDeliveryTypes';
+import { deliverySummaryLine } from './customerDeliveryTypes';
 import './customer-app.css';
 
 const emptyAddr: DeliveryAddress = {
@@ -28,20 +22,14 @@ function toFields(s: SavedAddress): DeliveryAddress {
 
 export function CustomerAddressesPage() {
   const formId = useId();
-  const [book, setBook] = useState(() => loadAddressBook());
+  const { book, loading, error, addSavedAddress, updateSavedAddress, removeSavedAddress, setSelectedAddressId } =
+    useCustomerDeliveryAddresses();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [tag, setTag] = useState<AddressTag>('home');
   const [customLabel, setCustomLabel] = useState('');
   const [fields, setFields] = useState<DeliveryAddress>({ ...emptyAddr });
-
-  const refresh = useCallback(() => setBook(loadAddressBook()), []);
-
-  useEffect(() => {
-    const onUpd = () => refresh();
-    window.addEventListener('dukaanpro-delivery-updated', onUpd);
-    return () => window.removeEventListener('dukaanpro-delivery-updated', onUpd);
-  }, [refresh]);
+  const [saving, setSaving] = useState(false);
 
   function openAdd() {
     setEditingId(null);
@@ -68,35 +56,50 @@ export function CustomerAddressesPage() {
     setFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  function submitForm(e: React.FormEvent) {
-    e.preventDefault();
-    const labelForOther = customLabel.trim() || 'Other';
-    if (editingId) {
-      updateSavedAddress(editingId, {
-        ...fields,
-        tag,
-        label: tag === 'other' ? labelForOther : undefined,
-      });
-    } else {
-      addSavedAddress({
-        tag,
-        label: tag === 'other' ? labelForOther : tag === 'home' ? 'Home' : 'Office',
-        ...fields,
-      });
+  const submitForm = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const labelForOther = customLabel.trim() || 'Other';
+      setSaving(true);
+      try {
+        if (editingId) {
+          await updateSavedAddress(editingId, {
+            ...fields,
+            tag,
+            label: tag === 'other' ? labelForOther : undefined,
+          });
+        } else {
+          await addSavedAddress({
+            tag,
+            label: tag === 'other' ? labelForOther : tag === 'home' ? 'Home' : 'Office',
+            ...fields,
+          });
+        }
+        closeForm();
+      } catch {
+        /* surfaced via error state on next load; could toast */
+      } finally {
+        setSaving(false);
+      }
+    },
+    [editingId, fields, tag, customLabel, updateSavedAddress, addSavedAddress],
+  );
+
+  async function selectForDelivery(id: string) {
+    try {
+      await setSelectedAddressId(id);
+    } catch {
+      /* ignore */
     }
-    refresh();
-    closeForm();
   }
 
-  function selectForDelivery(id: string) {
-    setSelectedAddressId(id);
-    refresh();
-  }
-
-  function onDelete(id: string) {
+  async function onDelete(id: string) {
     if (!window.confirm('Remove this saved address?')) return;
-    removeSavedAddress(id);
-    refresh();
+    try {
+      await removeSavedAddress(id);
+    } catch {
+      /* ignore */
+    }
   }
 
   return (
@@ -104,10 +107,18 @@ export function CustomerAddressesPage() {
       <h2 className="cust__pageTitle">Delivery addresses</h2>
       <p className="cust__sub">
         Save Home, Office, or custom tags. The one marked <strong>Active</strong> is used at checkout and in the header.
+        Addresses are stored on your account.
       </p>
+      {error ? (
+        <p className="cust__sub" role="alert" style={{ color: 'var(--cust-danger, #c62828)' }}>
+          {error}
+        </p>
+      ) : null}
 
       <div className="cust__addrList">
-        {book.addresses.length === 0 ? (
+        {loading ? (
+          <p className="cust__sub">Loading addresses…</p>
+        ) : book.addresses.length === 0 ? (
           <div className="cust__panel cust__addrEmpty">
             <p className="cust__sub" style={{ marginBottom: '0.75rem' }}>
               No addresses yet. Add your first one to see delivery options at checkout.
@@ -131,14 +142,18 @@ export function CustomerAddressesPage() {
                 </p>
                 <div className="cust__addrActions">
                   {!active ? (
-                    <button type="button" className="cust__btn cust__btn--teal cust__btn--sm" onClick={() => selectForDelivery(s.id)}>
+                    <button
+                      type="button"
+                      className="cust__btn cust__btn--teal cust__btn--sm"
+                      onClick={() => void selectForDelivery(s.id)}
+                    >
                       Use for delivery
                     </button>
                   ) : null}
                   <button type="button" className="cust__btn cust__btn--ghost cust__btn--sm" onClick={() => openEdit(s)}>
                     Edit
                   </button>
-                  <button type="button" className="cust__btn cust__btn--ghost cust__btn--sm" onClick={() => onDelete(s.id)}>
+                  <button type="button" className="cust__btn cust__btn--ghost cust__btn--sm" onClick={() => void onDelete(s.id)}>
                     Remove
                   </button>
                 </div>
@@ -148,14 +163,14 @@ export function CustomerAddressesPage() {
         )}
       </div>
 
-      {book.addresses.length > 0 ? (
+      {!loading && book.addresses.length > 0 ? (
         <button type="button" className="cust__btn cust__btn--primary cust__btn--block" style={{ marginBottom: '1rem' }} onClick={openAdd}>
           Add another address
         </button>
       ) : null}
 
       {showForm ? (
-        <form className="cust__panel" onSubmit={submitForm}>
+        <form className="cust__panel" onSubmit={(e) => void submitForm(e)}>
           <p className="cust__sectionLabel" style={{ marginBottom: '0.65rem' }}>
             {editingId ? 'Edit address' : 'New address'}
           </p>
@@ -280,8 +295,8 @@ export function CustomerAddressesPage() {
             <button type="button" className="cust__btn cust__btn--ghost cust__btn--block" onClick={closeForm}>
               Cancel
             </button>
-            <button type="submit" className="cust__btn cust__btn--teal cust__btn--block">
-              {editingId ? 'Save changes' : 'Save address'}
+            <button type="submit" className="cust__btn cust__btn--teal cust__btn--block" disabled={saving}>
+              {saving ? 'Saving…' : editingId ? 'Save changes' : 'Save address'}
             </button>
           </div>
         </form>
