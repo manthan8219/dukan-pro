@@ -28,6 +28,38 @@ export type AddressBook = {
   selectedId: string | null;
 };
 
+/**
+ * Map pin to use for “delivers to me” discovery: selected address first, then any saved row with coords.
+ */
+export function resolveAddressBookMapPin(
+  book: AddressBook,
+): { latitude: number; longitude: number } | null {
+  const byId = new Map(book.addresses.map((a) => [a.id, a] as const));
+  const ordered: SavedAddress[] = [];
+  if (book.selectedId) {
+    const sel = byId.get(book.selectedId);
+    if (sel) {
+      ordered.push(sel);
+    }
+  }
+  for (const a of book.addresses) {
+    if (!ordered.includes(a)) {
+      ordered.push(a);
+    }
+  }
+  for (const a of ordered) {
+    if (
+      a.latitude != null &&
+      a.longitude != null &&
+      Number.isFinite(a.latitude) &&
+      Number.isFinite(a.longitude)
+    ) {
+      return { latitude: a.latitude, longitude: a.longitude };
+    }
+  }
+  return null;
+}
+
 function normalizeCoord(v: unknown): number | null {
   if (typeof v !== 'number' || !Number.isFinite(v)) return null;
   return v;

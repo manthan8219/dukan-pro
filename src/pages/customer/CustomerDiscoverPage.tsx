@@ -7,6 +7,9 @@ import {
   getCachedDeviceCoordinates,
   requestDeviceCoordinates,
 } from '../../geo/deviceLocation';
+import { useCustomerCart } from './cartContext';
+import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
+import { resolveAddressBookMapPin } from './customerDeliveryTypes';
 import {
   DEFAULT_SHOP_FILTERS,
   type ShopCategory,
@@ -63,8 +66,15 @@ function filterNearbyShops(shops: ShopNearbySummary[], f: ShopFilters): ShopNear
 export function CustomerDiscoverPage() {
   const location = useLocation();
   const { user } = useAuth();
+  const { book, loading: addressesLoading } = useCustomerDeliveryAddresses();
+  const { subtotal } = useCustomerCart();
   const orderPlaced = (location.state as { orderPlaced?: boolean } | null)?.orderPlaced;
   const firstName = user?.displayName?.trim().split(/\s+/)[0] ?? 'there';
+
+  const savedDeliveryPin = useMemo(
+    () => resolveAddressBookMapPin(book),
+    [book.selectedId, book.addresses],
+  );
 
   const [filters, setFilters] = useState<ShopFilters>({ ...DEFAULT_SHOP_FILTERS });
   const [shops, setShops] = useState<ShopNearbySummary[]>([]);
@@ -72,7 +82,15 @@ export function CustomerDiscoverPage() {
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const orderAmountRupees =
+    subtotal > 0 ? Math.max(0, Math.round(Number(subtotal))) : undefined;
+
   useEffect(() => {
+    if (addressesLoading) {
+      setLoading(true);
+      return;
+    }
+
     let cancelled = false;
     const ac = new AbortController();
 
@@ -86,7 +104,12 @@ export function CustomerDiscoverPage() {
         void (async () => {
           if (cancelled) return;
           try {
-            const rows = await fetchDiscoverableShops(lat, lng, ac.signal);
+            const rows = await fetchDiscoverableShops(
+              lat,
+              lng,
+              ac.signal,
+              orderAmountRupees,
+            );
             if (cancelled || ac.signal.aborted) return;
             setShops(rows);
           } catch (e) {
@@ -99,10 +122,23 @@ export function CustomerDiscoverPage() {
         })();
       };
 
+      if (savedDeliveryPin) {
+        finishGeo(
+          savedDeliveryPin.latitude,
+          savedDeliveryPin.longitude,
+          'Using your saved delivery map pin (Addresses). Set the pin on the map there so matches stay accurate.',
+        );
+        return;
+      }
+
       const live = await requestDeviceCoordinates({ preferHighAccuracy: false });
       if (cancelled) return;
       if (live) {
-        finishGeo(live.latitude, live.longitude, null);
+        finishGeo(
+          live.latitude,
+          live.longitude,
+          'Using this device location. Add a delivery address with a map pin to match where orders should arrive.',
+        );
         return;
       }
       const cached = getCachedDeviceCoordinates();
@@ -110,14 +146,14 @@ export function CustomerDiscoverPage() {
         finishGeo(
           cached.latitude,
           cached.longitude,
-          'Using a recent location on this device — allow location for live accuracy.',
+          'Using a recent device location — allow location or set a delivery pin in Addresses for accuracy.',
         );
         return;
       }
       finishGeo(
         FALLBACK_MAP_CENTER.latitude,
         FALLBACK_MAP_CENTER.longitude,
-        'Location unavailable — showing a default area. Allow location to see shops near you.',
+        'No delivery pin or device location — showing a default area (Pune). Open Addresses to set where you receive orders.',
       );
     }
 
@@ -126,7 +162,7 @@ export function CustomerDiscoverPage() {
       cancelled = true;
       ac.abort();
     };
-  }, []);
+  }, [addressesLoading, savedDeliveryPin, orderAmountRupees]);
 
   const filtered = useMemo(() => filterNearbyShops(shops, filters), [shops, filters]);
 
@@ -160,8 +196,9 @@ export function CustomerDiscoverPage() {
           Hi {firstName} — what are we stocking today?
         </h2>
         <p className="cust__discoverLead">
-          We show shops whose <strong>delivery radius</strong> reaches your current location (from your device). Open a
-          shop to browse real stock from the server.
+          We list shops whose <strong>delivery radius</strong> reaches your point on the map:{' '}
+          <strong>saved delivery pin</strong> first, then this device, then a fallback. Distance is straight-line (km);
+          the server also uses your <strong>basket total</strong> when shops offer bigger radius for larger orders.
         </p>
         <div className="cust__statRow" role="list">
           <div className="cust__statCard" role="listitem">
@@ -211,8 +248,8 @@ export function CustomerDiscoverPage() {
       <span className="cust__mockPill">Live catalog</span>
       <h2 className="cust__pageTitle">Nearby shops</h2>
       <p className="cust__sub">
-        Search and filter below. Distance is straight-line to the shop; each shop sets radius (and optional tiers by
-        order value) on the server.
+        Search and filter below. Each shop sets a default radius and optional tiers (higher order → longer distance) on
+        the server; we pass your basket subtotal so those tiers apply when relevant.
       </p>
 
       <input
