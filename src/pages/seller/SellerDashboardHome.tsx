@@ -1,38 +1,57 @@
 import type { ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
+import { useAuth } from '../../auth/AuthContext';
 import { isSellerOnboardingComplete } from '../../auth/session';
+import type { SellerDashboard, SellerDashboardMonthly } from '../../api/sellerDashboard';
+import { fetchSellerDashboard } from '../../api/sellerDashboard';
 import type { SellerOutletContext } from './SellerLayout';
-import type { MonthlyMetric, SellerDashboardMock } from './sellerDashboardMock';
-import { SELLER_DASHBOARD_MOCK } from './sellerDashboardMock';
 
-function formatINR(value: number): string {
+function formatINR(valueRupees: number): string {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(valueRupees);
 }
 
-function formatINRCompact(value: number): string {
-  if (value >= 100_000) {
-    return `₹${(value / 100_000).toFixed(2)}L`;
+function formatINRCompact(valueRupees: number): string {
+  if (valueRupees >= 100_000) {
+    return `₹${(valueRupees / 100_000).toFixed(2)}L`;
   }
-  if (value >= 1000) {
-    return `₹${(value / 1000).toFixed(1)}k`;
+  if (valueRupees >= 1000) {
+    return `₹${(valueRupees / 1000).toFixed(1)}k`;
   }
-  return formatINR(value);
+  return formatINR(valueRupees);
 }
 
-function MonthlyPerformanceChart({ monthly }: { monthly: MonthlyMetric[] }) {
+function minorToRupees(minor: number): number {
+  return minor / 100;
+}
+
+function MonthlyPerformanceChart({ monthly }: { monthly: SellerDashboardMonthly[] }) {
   const W = 640;
   const H = 220;
   const pad = { top: 24, right: 20, bottom: 40, left: 52 };
   const innerW = W - pad.left - pad.right;
   const innerH = H - pad.top - pad.bottom;
-  const maxVal = Math.max(...monthly.flatMap((m) => [m.revenue, m.profit, m.loss]), 1);
+  const hasProfitLoss = monthly.some(
+    (m) => m.profitMinor != null || m.lossMinor != null,
+  );
+  const maxVal = Math.max(
+    ...monthly.flatMap((m) => {
+      const parts = [minorToRupees(m.revenueMinor)];
+      if (m.profitMinor != null) parts.push(minorToRupees(m.profitMinor));
+      if (m.lossMinor != null) parts.push(minorToRupees(m.lossMinor));
+      return parts;
+    }),
+    1,
+  );
   const groupCount = monthly.length;
   const groupW = innerW / groupCount;
-  const barW = (groupW - 10) / 3;
+  const barCount = hasProfitLoss ? 3 : 1;
+  const innerBarGap = hasProfitLoss ? 4 : 0;
+  const barW = (groupW - 10 - innerBarGap * (barCount - 1)) / barCount;
 
   return (
     <svg
@@ -41,7 +60,11 @@ function MonthlyPerformanceChart({ monthly }: { monthly: MonthlyMetric[] }) {
       width="100%"
       height="220"
       role="img"
-      aria-label="Monthly revenue, profit, and loss bars (sample data)"
+      aria-label={
+        hasProfitLoss
+          ? 'Monthly revenue, profit, and loss'
+          : 'Monthly revenue (profit and loss not tracked)'
+      }
     >
       {[0, 0.25, 0.5, 0.75, 1].map((t) => {
         const y = pad.top + innerH * (1 - t);
@@ -62,11 +85,17 @@ function MonthlyPerformanceChart({ monthly }: { monthly: MonthlyMetric[] }) {
         );
       })}
       {monthly.map((m, i) => {
-        const gx = pad.left + i * groupW + groupW / 2 - (barW * 3 + 8) / 2;
-        const revH = (m.revenue / maxVal) * innerH;
-        const profH = (m.profit / maxVal) * innerH;
-        const lossH = (m.loss / maxVal) * innerH;
+        const gx = pad.left + i * groupW + groupW / 2 - (barW * barCount + innerBarGap * (barCount - 1)) / 2;
         const baseY = pad.top + innerH;
+        const revH = (minorToRupees(m.revenueMinor) / maxVal) * innerH;
+        const profH =
+          hasProfitLoss && m.profitMinor != null
+            ? (minorToRupees(m.profitMinor) / maxVal) * innerH
+            : 0;
+        const lossH =
+          hasProfitLoss && m.lossMinor != null
+            ? (minorToRupees(m.lossMinor) / maxVal) * innerH
+            : 0;
         return (
           <g key={m.month}>
             <rect
@@ -77,24 +106,28 @@ function MonthlyPerformanceChart({ monthly }: { monthly: MonthlyMetric[] }) {
               rx={4}
               className="sdash__chartBar sdash__chartBar--revenue"
             />
-            <rect
-              x={gx + barW + 4}
-              y={baseY - profH}
-              width={barW}
-              height={profH}
-              rx={4}
-              className="sdash__chartBar sdash__chartBar--profit"
-            />
-            <rect
-              x={gx + barW * 2 + 8}
-              y={baseY - lossH}
-              width={barW}
-              height={lossH}
-              rx={4}
-              className="sdash__chartBar sdash__chartBar--loss"
-            />
+            {hasProfitLoss ? (
+              <>
+                <rect
+                  x={gx + barW + innerBarGap}
+                  y={baseY - profH}
+                  width={barW}
+                  height={profH}
+                  rx={4}
+                  className="sdash__chartBar sdash__chartBar--profit"
+                />
+                <rect
+                  x={gx + barW * 2 + innerBarGap * 2}
+                  y={baseY - lossH}
+                  width={barW}
+                  height={lossH}
+                  rx={4}
+                  className="sdash__chartBar sdash__chartBar--loss"
+                />
+              </>
+            ) : null}
             <text
-              x={gx + barW * 1.5 + 4}
+              x={gx + (barW * barCount + innerBarGap * (barCount - 1)) / 2}
               y={H - 12}
               className="sdash__chartAxis sdash__chartAxis--month"
               textAnchor="middle"
@@ -130,25 +163,76 @@ function KpiCard({
 
 export function SellerDashboardHome() {
   const { shopId } = useOutletContext<SellerOutletContext>();
+  const { backendProfile } = useAuth();
+  const ownerUserId = backendProfile?.id ?? null;
   const onboardingDone = isSellerOnboardingComplete();
-  const d: SellerDashboardMock = SELLER_DASHBOARD_MOCK;
-  const mixTotal = d.newCustomersMonth + d.returningCustomersMonth;
-  const newMixPct = mixTotal > 0 ? (d.newCustomersMonth / mixTotal) * 100 : 50;
-  const retMixPct = mixTotal > 0 ? (d.returningCustomersMonth / mixTotal) * 100 : 50;
+
+  const [data, setData] = useState<SellerDashboard | null>(null);
+  const [loading, setLoading] = useState(() => Boolean(shopId && ownerUserId));
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!shopId || !ownerUserId) {
+      setData(null);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const d = await fetchSellerDashboard(ownerUserId, shopId);
+      setData(d);
+    } catch (e) {
+      setData(null);
+      setError(e instanceof Error ? e.message : 'Could not load dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [shopId, ownerUserId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const d = data;
+  const mixTotal =
+    d != null ? d.newCustomersMonth + d.returningCustomersMonth : 0;
+  const newMixPct = mixTotal > 0 ? (d!.newCustomersMonth / mixTotal) * 100 : 50;
+  const retMixPct =
+    mixTotal > 0 ? (d!.returningCustomersMonth / mixTotal) * 100 : 50;
 
   return (
     <>
       <div className="sdash__panel sdash__panel--dashHead" style={{ marginBottom: '1.25rem' }}>
         <div className="sdash__panelHead">
           <h2>Welcome to your seller hub</h2>
-          <span className="sdash__mockPill" title="Numbers below are for layout only until the API is connected">
-            Sample data
-          </span>
+          {loading ? (
+            <span className="sdash__mockPill" title="Loading dashboard">
+              Loading…
+            </span>
+          ) : d ? (
+            <span className="sdash__mockPill" title={d.metricsDefinition}>
+              Live data
+            </span>
+          ) : null}
         </div>
         <p>
-          Use the menu for billing, orders, and stock. The overview below shows the metrics we’ll fill from your API —
-          revenue, profit, losses, and customer loyalty.
+          Overview of sales, fulfilment, stock, and customers. Amounts use your shop’s order totals (including delivery
+          share where applicable).
         </p>
+        {error ? (
+          <p style={{ marginTop: '0.75rem', color: '#b91c1c' }}>
+            {error}{' '}
+            <button
+              type="button"
+              className="sdash__inlineLink"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}
+              onClick={() => void load()}
+            >
+              Retry
+            </button>
+          </p>
+        ) : null}
         {!shopId &&
           (onboardingDone ? (
             <p style={{ marginTop: '0.75rem' }}>
@@ -167,113 +251,149 @@ export function SellerDashboardHome() {
               to create one.
             </p>
           ))}
+        {shopId && !ownerUserId ? (
+          <p style={{ marginTop: '0.75rem' }}>Sign in to load your dashboard.</p>
+        ) : null}
       </div>
 
-      <p className="sdash__sectionLabel">This month ({d.periodLabel})</p>
-      <div className="sdash__grid sdash__kpiGrid">
-        <KpiCard label="Revenue" value={formatINR(d.revenueMonth)} hint="Gross sales in period" />
-        <KpiCard label="Profit" value={formatINR(d.profitMonth)} variant="profit" hint="After estimated costs" />
-        <KpiCard label="Loss / leakage" value={formatINR(d.lossMonth)} variant="loss" hint="Returns, wastage, shrink" />
-        <KpiCard label="Orders" value={String(d.ordersMonth)} hint={`AOV ${formatINR(d.avgOrderValue)}`} />
-      </div>
-
-      <div className="sdash__grid sdash__kpiGrid sdash__kpiGrid--secondary" style={{ marginTop: '1rem' }}>
-        <KpiCard
-          label="Open orders"
-          value={String(d.openOrders)}
-          hint={
-            <Link to="/app/seller/orders" className="sdash__inlineLink">
-              Order desk →
-            </Link>
-          }
-        />
-        <KpiCard
-          label="Low stock SKUs"
-          value={String(d.lowStockSkus)}
-          hint={
-            <Link to="/app/seller/inventory" className="sdash__inlineLink">
-              Inventory →
-            </Link>
-          }
-        />
-        <KpiCard
-          label="Repeat customers"
-          value={`${d.repeatCustomerPercent}%`}
-          hint="Bought more than once in window"
-        />
-        <KpiCard
-          label="New vs returning"
-          value={`${d.newCustomersMonth} / ${d.returningCustomersMonth}`}
-          hint="Customers this month"
-        />
-      </div>
-
-      <div className="sdash__split" style={{ marginTop: '1.5rem' }}>
-        <div className="sdash__panel sdash__chartPanel">
-          <div className="sdash__panelHead sdash__panelHead--tight">
-            <h3 className="sdash__h3">Monthly performance</h3>
-            <div className="sdash__chartLegend">
-              <span className="sdash__legendItem sdash__legendItem--revenue">Revenue</span>
-              <span className="sdash__legendItem sdash__legendItem--profit">Profit</span>
-              <span className="sdash__legendItem sdash__legendItem--loss">Loss</span>
-            </div>
-          </div>
-          <MonthlyPerformanceChart monthly={d.monthly} />
-        </div>
-
-        <div className="sdash__panel sdash__sideStack">
-          <div>
-            <h3 className="sdash__h3">Top movers</h3>
-            <p className="sdash__sideHint">By revenue — sample catalog</p>
-            <table className="sdash__table">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th className="sdash__tableNum">Units</th>
-                  <th className="sdash__tableNum">Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.topProducts.map((row) => (
-                  <tr key={row.name}>
-                    <td>{row.name}</td>
-                    <td className="sdash__tableNum">{row.unitsSold}</td>
-                    <td className="sdash__tableNum">{formatINR(row.revenue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {d ? (
+        <>
+          <p className="sdash__sectionLabel">This month ({d.periodLabel})</p>
+          <div className="sdash__grid sdash__kpiGrid">
+            <KpiCard
+              label="Revenue"
+              value={formatINR(minorToRupees(d.revenueMonthMinor))}
+              hint="Non-cancelled orders placed this month (UTC)"
+            />
+            <KpiCard
+              label="Profit"
+              value={d.profitMonthMinor != null ? formatINR(minorToRupees(d.profitMonthMinor)) : '—'}
+              variant="profit"
+              hint={d.profitMonthMinor == null ? 'Add cost data to track margin' : 'After estimated costs'}
+            />
+            <KpiCard
+              label="Loss / leakage"
+              value={d.lossMonthMinor != null ? formatINR(minorToRupees(d.lossMonthMinor)) : '—'}
+              variant="loss"
+              hint={d.lossMonthMinor == null ? 'Returns & shrink not modeled yet' : 'Returns, wastage, shrink'}
+            />
+            <KpiCard
+              label="Orders"
+              value={String(d.ordersMonth)}
+              hint={`AOV ${formatINR(minorToRupees(d.avgOrderValueMinor))}`}
+            />
           </div>
 
-          <div className="sdash__customerMix">
-            <h3 className="sdash__h3">Customer mix</h3>
-            <div className="sdash__mixBar" role="presentation">
-              <div
-                className="sdash__mixBarSeg sdash__mixBarSeg--new"
-                style={{ width: `${newMixPct}%` }}
-                title="New"
-              />
-              <div
-                className="sdash__mixBarSeg sdash__mixBarSeg--returning"
-                style={{ width: `${retMixPct}%` }}
-                title="Returning"
-              />
-            </div>
-            <div className="sdash__mixLabels">
-              <span>
-                <i className="sdash__mixDot sdash__mixDot--new" /> New ({d.newCustomersMonth})
-              </span>
-              <span>
-                <i className="sdash__mixDot sdash__mixDot--returning" /> Returning ({d.returningCustomersMonth})
-              </span>
-            </div>
+          <div className="sdash__grid sdash__kpiGrid sdash__kpiGrid--secondary" style={{ marginTop: '1rem' }}>
+            <KpiCard
+              label="Open orders"
+              value={String(d.openOrders)}
+              hint={
+                <Link to="/app/seller/orders" className="sdash__inlineLink">
+                  Order desk →
+                </Link>
+              }
+            />
+            <KpiCard
+              label="Low stock SKUs"
+              value={String(d.lowStockSkus)}
+              hint={
+                <Link to="/app/seller/inventory" className="sdash__inlineLink">
+                  Inventory →
+                </Link>
+              }
+            />
+            <KpiCard
+              label="Repeat customers"
+              value={`${d.repeatCustomerPercent}%`}
+              hint="2+ orders from same buyer this month"
+            />
+            <KpiCard
+              label="New vs returning"
+              value={`${d.newCustomersMonth} / ${d.returningCustomersMonth}`}
+              hint="Distinct buyers this month"
+            />
           </div>
 
-          <Link to="/app/seller/billing" className="sdash__quickLink">
-            Create bill / invoice →
-          </Link>
-        </div>
-      </div>
+          <div className="sdash__split" style={{ marginTop: '1.5rem' }}>
+            <div className="sdash__panel sdash__chartPanel">
+              <div className="sdash__panelHead sdash__panelHead--tight">
+                <h3 className="sdash__h3">Monthly performance</h3>
+                <div className="sdash__chartLegend">
+                  <span className="sdash__legendItem sdash__legendItem--revenue">Revenue</span>
+                  <span className="sdash__legendItem sdash__legendItem--profit">Profit</span>
+                  <span className="sdash__legendItem sdash__legendItem--loss">Loss</span>
+                </div>
+              </div>
+              <MonthlyPerformanceChart monthly={d.monthly} />
+            </div>
+
+            <div className="sdash__panel sdash__sideStack">
+              <div>
+                <h3 className="sdash__h3">Top movers</h3>
+                <p className="sdash__sideHint">By revenue — this month (UTC)</p>
+                <table className="sdash__table">
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th className="sdash__tableNum">Units</th>
+                      <th className="sdash__tableNum">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {d.topProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="sdash__sideHint">
+                          No sales this period
+                        </td>
+                      </tr>
+                    ) : (
+                      d.topProducts.map((row, idx) => (
+                        <tr key={`${idx}-${row.name}`}>
+                          <td>{row.name}</td>
+                          <td className="sdash__tableNum">{row.unitsSold}</td>
+                          <td className="sdash__tableNum">{formatINR(minorToRupees(row.revenueMinor))}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="sdash__customerMix">
+                <h3 className="sdash__h3">Customer mix</h3>
+                <div className="sdash__mixBar" role="presentation">
+                  <div
+                    className="sdash__mixBarSeg sdash__mixBarSeg--new"
+                    style={{ width: `${newMixPct}%` }}
+                    title="New"
+                  />
+                  <div
+                    className="sdash__mixBarSeg sdash__mixBarSeg--returning"
+                    style={{ width: `${retMixPct}%` }}
+                    title="Returning"
+                  />
+                </div>
+                <div className="sdash__mixLabels">
+                  <span>
+                    <i className="sdash__mixDot sdash__mixDot--new" /> New ({d.newCustomersMonth})
+                  </span>
+                  <span>
+                    <i className="sdash__mixDot sdash__mixDot--returning" /> Returning (
+                    {d.returningCustomersMonth})
+                  </span>
+                </div>
+              </div>
+
+              <Link to="/app/seller/billing" className="sdash__quickLink">
+                Create bill / invoice →
+              </Link>
+            </div>
+          </div>
+        </>
+      ) : !loading && shopId && ownerUserId ? (
+        <p className="sdash__sectionLabel">No dashboard data yet.</p>
+      ) : null}
     </>
   );
 }
