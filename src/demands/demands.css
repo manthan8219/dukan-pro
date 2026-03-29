@@ -270,6 +270,23 @@
   margin: 0.35rem 0 0.5rem;
 }
 
+.dm__quoteCard--chosen {
+  border: 2px solid var(--cust-teal, #0d9488);
+  box-shadow: 0 0 0 1px rgba(13, 148, 136, 0.12);
+}
+
+.dm__chosenPill {
+  display: inline-block;
+  margin-top: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--cust-teal, #0d9488);
+}
+
 .dm__empty {
   text-align: center;
   padding: 1.5rem;

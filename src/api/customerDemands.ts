@@ -20,6 +20,8 @@ export type CustomerDemandRecord = {
   deliveryLongitude: number | null;
   notifiedShopCount: number;
   quotationCount: number;
+  awardedInvitationId?: string | null;
+  awardedShopDisplayName?: string | null;
 };
 
 export type CustomerDemandQuotation = {
@@ -105,4 +107,23 @@ export async function listDemandQuotations(
     throw new Error(await readErrorMessage(res));
   }
   return (await res.json()) as CustomerDemandQuotation[];
+}
+
+export async function acceptDemandQuotation(
+  userId: string,
+  demandId: string,
+  invitationId: string,
+): Promise<CustomerDemandRecord> {
+  const res = await fetch(
+    `${getApiBase()}/users/${userId}/demands/${demandId}/accept-quotation`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invitationId }),
+    },
+  );
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  return (await res.json()) as CustomerDemandRecord;
 }

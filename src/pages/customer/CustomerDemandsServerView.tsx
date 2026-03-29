@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
+  acceptDemandQuotation,
   closeCustomerDemand,
   createCustomerDemand,
   listCustomerDemands,
@@ -73,6 +74,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [quotesOpenFor, setQuotesOpenFor] = useState<string | null>(null);
   const [quotes, setQuotes] = useState<CustomerDemandQuotation[]>([]);
   const [quotesError, setQuotesError] = useState<string | null>(null);
+  const [acceptingKey, setAcceptingKey] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setLoadError(null);
@@ -313,6 +315,35 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     }
   }
 
+  async function onAcceptQuotation(demandId: string, invitationId: string, shopName: string) {
+    if (
+      !window.confirm(
+        `Accept the quotation from “${shopName}”? Other shops will no longer be competing for this request.`,
+      )
+    ) {
+      return;
+    }
+    const key = `${demandId}:${invitationId}`;
+    setFormError(null);
+    setAcceptingKey(key);
+    try {
+      await acceptDemandQuotation(serverUserId, demandId, invitationId);
+      await refresh();
+      if (quotesOpenFor === demandId) {
+        try {
+          const rows = await listDemandQuotations(serverUserId, demandId);
+          setQuotes(rows);
+        } catch {
+          /* list still shows previous; user can reopen */
+        }
+      }
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Could not accept quotation');
+    } finally {
+      setAcceptingKey(null);
+    }
+  }
+
   return (
     <motion.div
       className="cust__demandsEmbed"
@@ -327,7 +358,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       <h2 className="cust__pageTitle">Request shop quotations</h2>
       <p className="cust__sub">
         Your request is saved securely. Pick the delivery spot on the map; when you publish, nearby shops that can reach
-        that point can reply with a quotation. Receipt total must be ≥{' '}
+        that point can reply with a quotation. When you have multiple quotes, open <strong>View quotations</strong> and
+        tap <strong>Choose this shop</strong> on the offer you want. Receipt total must be ≥{' '}
         {formatInrRupees(MIN_ORDER_TO_POST_RUPEES)}.
       </p>
 
@@ -541,6 +573,15 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
             ) : null}
             <p className="dm__cardBody">{d.details}</p>
 
+            {d.status === 'AWARDED' && d.awardedShopDisplayName ? (
+              <div className="dm__panel" style={{ marginTop: '0.65rem', marginBottom: 0 }}>
+                <p className="dm__cardMeta" style={{ margin: 0 }}>
+                  You chose: <strong>{d.awardedShopDisplayName}</strong>. Coordinate delivery or checkout with them
+                  directly.
+                </p>
+              </div>
+            ) : null}
+
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
               {d.status === 'DRAFT' ? (
                 <button
@@ -562,7 +603,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
                   Close request
                 </button>
               ) : null}
-              {d.quotationCount > 0 ? (
+              {d.quotationCount > 0 || d.status === 'AWARDED' ? (
                 <button
                   type="button"
                   className="dm__btn dm__btn--ghost dm__btn--sm"
@@ -579,22 +620,44 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
                 {quotes.length === 0 && !quotesError ? (
                   <p className="dm__cardMeta">Loading…</p>
                 ) : (
-                  quotes.map((q) => (
-                    <div key={q.invitationId} className="dm__panel" style={{ marginBottom: '0.5rem' }}>
-                      <p className="dm__bidShop">{q.shopDisplayName}</p>
-                      <p className="dm__cardBody" style={{ marginBottom: '0.35rem' }}>
-                        {q.quotationText}
-                      </p>
-                      {q.quotationDocumentUrl ? (
-                        <a href={q.quotationDocumentUrl} className="dm__link" target="_blank" rel="noreferrer">
-                          View attached bill / PDF
-                        </a>
-                      ) : null}
-                      <p className="dm__cardMeta" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
-                        {new Date(q.respondedAt).toLocaleString()}
-                      </p>
-                    </div>
-                  ))
+                  quotes.map((q) => {
+                    const isChosen =
+                      d.status === 'AWARDED' && d.awardedInvitationId === q.invitationId;
+                    const acceptKey = `${d.id}:${q.invitationId}`;
+                    const accepting = acceptingKey === acceptKey;
+                    return (
+                      <div
+                        key={q.invitationId}
+                        className={`dm__panel${isChosen ? ' dm__quoteCard--chosen' : ''}`}
+                        style={{ marginBottom: '0.5rem' }}
+                      >
+                        <p className="dm__bidShop">{q.shopDisplayName}</p>
+                        {isChosen ? <span className="dm__chosenPill">Your choice</span> : null}
+                        <p className="dm__cardBody" style={{ marginBottom: '0.35rem', marginTop: '0.35rem' }}>
+                          {q.quotationText}
+                        </p>
+                        {q.quotationDocumentUrl ? (
+                          <a href={q.quotationDocumentUrl} className="dm__link" target="_blank" rel="noreferrer">
+                            View attached bill / PDF
+                          </a>
+                        ) : null}
+                        <p className="dm__cardMeta" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
+                          {new Date(q.respondedAt).toLocaleString()}
+                        </p>
+                        {d.status === 'LIVE' ? (
+                          <button
+                            type="button"
+                            className="dm__btn dm__btn--good dm__btn--sm"
+                            style={{ marginTop: '0.5rem' }}
+                            disabled={busy || accepting}
+                            onClick={() => void onAcceptQuotation(d.id, q.invitationId, q.shopDisplayName)}
+                          >
+                            {accepting ? 'Saving…' : 'Choose this shop'}
+                          </button>
+                        ) : null}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             ) : null}
