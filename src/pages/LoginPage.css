@@ -6,6 +6,9 @@
   --login-cream: #f8faf8;
   --login-card: rgba(255, 255, 255, 0.97);
   --login-border: rgba(15, 61, 58, 0.12);
+  --login-input-border: rgba(15, 118, 110, 0.38);
+  --login-input-border-hover: rgba(15, 118, 110, 0.52);
+  --login-input-ring: rgba(45, 212, 191, 0.22);
   --login-text: #0f172a;
   --login-muted: #64748b;
   --login-radius: 16px;
@@ -269,7 +272,7 @@
   width: 100%;
   padding: 0.75rem 0.9rem;
   border-radius: var(--login-radius-sm);
-  border: 1px solid var(--login-border);
+  border: 2px solid var(--login-input-border);
   background: #fff;
   color: var(--login-text);
   transition:
@@ -281,14 +284,16 @@
   color: #94a3b8;
 }
 
-.login__input:hover:not(:disabled) {
-  border-color: rgba(15, 61, 58, 0.22);
+.login__input:hover:not(:disabled):not(:focus) {
+  border-color: var(--login-input-border-hover);
 }
 
 .login__input:focus {
   outline: none;
   border-color: var(--login-mint);
-  box-shadow: 0 0 0 3px var(--login-mint-soft);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--login-input-ring);
 }
 
 .login__input:disabled {

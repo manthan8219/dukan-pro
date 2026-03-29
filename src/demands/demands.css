@@ -4,6 +4,10 @@
   --dm-teal: #0f766e;
   --dm-muted: #64748b;
   --dm-border: rgba(15, 61, 58, 0.12);
+  --dm-input-border: rgba(15, 118, 110, 0.38);
+  --dm-input-border-hover: rgba(15, 118, 110, 0.55);
+  --dm-input-border-focus: #0d9488;
+  --dm-input-ring: rgba(20, 184, 166, 0.28);
   max-width: 720px;
   margin: 0 auto;
   padding: 0 1rem 2rem;
@@ -66,12 +70,17 @@
 .dm__textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--dm-border);
+  padding: 0.6rem 0.85rem;
+  border: 2px solid var(--dm-input-border);
   border-radius: 10px;
   font: inherit;
   font-size: 0.92rem;
   margin-bottom: 0.85rem;
+  background: #fff;
+  color: #0f172a;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .dm__textarea {
@@ -79,11 +88,34 @@
   resize: vertical;
 }
 
+.dm__input:hover:not(:disabled):not(:focus),
+.dm__textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--dm-input-border-hover);
+}
+
 .dm__input:focus,
 .dm__textarea:focus {
   outline: none;
-  border-color: #14b8a6;
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+  border-color: var(--dm-input-border-focus);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--dm-input-ring);
+}
+
+.dm__input:focus-visible,
+.dm__textarea:focus-visible {
+  outline: none;
+  border-color: var(--dm-input-border-focus);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--dm-input-ring);
+}
+
+.dm__input:disabled,
+.dm__textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #f8fafc;
 }
 
 .dm__btn {

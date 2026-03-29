@@ -3,6 +3,9 @@
 .wiz {
   --wiz-ink: #042f2e;
   --wiz-teal: #0f766e;
+  --wiz-input-border: rgba(15, 118, 110, 0.4);
+  --wiz-input-border-hover: rgba(15, 118, 110, 0.58);
+  --wiz-input-ring: rgba(20, 184, 166, 0.28);
   --wiz-mint: #5eead4;
   --wiz-sun: #fcd34d;
   --wiz-coral: #fb7185;
@@ -303,22 +306,30 @@
 .wiz__input,
 .wiz__textarea {
   width: 100%;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--wiz-input-border);
   border-radius: 14px;
   padding: 0.8rem 1rem;
   margin-bottom: 0.15rem;
   background: #fff;
   font-size: 1rem;
+  color: var(--wiz-dark);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.wiz__input:hover:not(:disabled):not(:focus),
+.wiz__textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--wiz-input-border-hover);
 }
 
 .wiz__input:focus,
 .wiz__textarea:focus {
   outline: none;
   border-color: var(--wiz-teal);
-  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--wiz-input-ring);
 }
 
 .wiz__textarea {
@@ -421,18 +432,28 @@
 }
 
 .wiz__tierInput {
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--wiz-input-border);
   border-radius: 12px;
   padding: 0.55rem 0.65rem;
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--wiz-dark);
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.wiz__tierInput:hover:not(:disabled):not(:focus) {
+  border-color: var(--wiz-input-border-hover);
 }
 
 .wiz__tierInput:focus {
   outline: none;
   border-color: var(--wiz-teal);
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.2);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--wiz-input-ring);
 }
 
 .wiz__tierRemove {

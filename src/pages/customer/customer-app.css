@@ -10,6 +10,10 @@
   --cust-text: #0f172a;
   --cust-muted: #64748b;
   --cust-border: rgba(15, 118, 110, 0.12);
+  --cust-input-border: rgba(15, 118, 110, 0.38);
+  --cust-input-border-hover: rgba(15, 118, 110, 0.55);
+  --cust-input-border-focus: #0d9488;
+  --cust-input-ring: rgba(20, 184, 166, 0.28);
   --cust-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
   --cust-tab-h: 3.65rem;
   --cust-content-max: 720px;
@@ -491,11 +495,37 @@
 .cust__textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.65rem 0.75rem;
+  padding: 0.65rem 0.85rem;
   border-radius: 10px;
-  border: 1px solid var(--cust-border);
+  border: 2px solid var(--cust-input-border);
   font: inherit;
   margin-bottom: 0.75rem;
+  background: #fff;
+  color: var(--cust-text);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.cust__input:hover:not(:disabled):not(:focus),
+.cust__textarea:hover:not(:disabled):not(:focus) {
+  border-color: var(--cust-input-border-hover);
+}
+
+.cust__input:focus,
+.cust__textarea:focus {
+  outline: none;
+  border-color: var(--cust-input-border-focus);
+  box-shadow:
+    0 0 0 1px #fff,
+    0 0 0 4px var(--cust-input-ring);
+}
+
+.cust__input:disabled,
+.cust__textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: #f8fafc;
 }
 
 .cust__textarea {
