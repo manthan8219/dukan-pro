@@ -19,6 +19,7 @@ import { SellerOrdersPage } from './pages/seller/SellerOrdersPage';
 import { SellerShopSettingsPage } from './pages/seller/SellerShopSettingsPage';
 import { SellerOnboardingPage } from './pages/SellerOnboardingPage';
 import { BarcodeScanPage } from './pages/BarcodeScanPage';
+import { ScannerHostPage } from './pages/ScannerHostPage';
 import { SignUpPage } from './pages/SignUpPage';
 import { RequireUser } from './routes/RequireUser';
 
@@ -28,6 +29,7 @@ export function App() {
         <Route path="/" element={<LoginPage />} />
         <Route path="/signup" element={<SignUpPage />} />
         <Route path="/scan" element={<BarcodeScanPage />} />
+        <Route path="/scanner-host" element={<ScannerHostPage />} />
         <Route
           path="/welcome/role"
           element={

@@ -142,3 +142,81 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
+.barcodeScan--relay {
+  min-height: 100dvh;
+  min-height: 100svh;
+}
+
+.barcodeScan--error {
+  min-height: 100dvh;
+  justify-content: center;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.barcodeScan__inlineCode {
+  font-size: 0.85em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: rgba(232, 245, 240, 0.1);
+}
+
+.barcodeScan__relayBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: rgba(5, 8, 7, 0.92);
+  border-bottom: 1px solid rgba(232, 245, 240, 0.08);
+}
+
+.barcodeScan__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(248, 250, 252, 0.25);
+}
+
+.barcodeScan__dot--on {
+  background: #34d399;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.6);
+}
+
+.barcodeScan__stage--fullscreen {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.barcodeScan__footer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.5rem 0.75rem 1rem;
+  font-size: 0.78rem;
+  border-top: 1px solid rgba(232, 245, 240, 0.08);
+  background: rgba(5, 8, 7, 0.88);
+}
+
+.barcodeScan__footerLabel {
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.65rem;
+}
+
+.barcodeScan__footerCode {
+  font-weight: 700;
+  word-break: break-all;
+  text-align: center;
+}

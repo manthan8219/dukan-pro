@@ -1,5 +1,15 @@
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import type { Socket } from 'socket.io-client';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+  WS_JOIN_SESSION,
+  WS_SCAN,
+  WS_SCAN_RECEIVED,
+  WS_SESSION_ERROR,
+  WS_SESSION_READY,
+} from '../scannerRelay/events';
+import { createScannerSocket } from '../scannerRelay/createScannerSocket';
 import './BarcodeScanPage.css';
 
 const VIEWPORT_ID = 'barcode-scan-viewport';
@@ -15,11 +25,12 @@ const FORMATS = [
   Html5QrcodeSupportedFormats.QR_CODE,
 ];
 
-type ScanLine = { text: string; format: string; at: number };
-
 function playScanFeedback(): void {
   try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     const osc = ctx.createOscillator();
@@ -45,33 +56,96 @@ function playScanFeedback(): void {
   }
 }
 
-function formatLabel(decodedResult: unknown): string {
-  if (!decodedResult || typeof decodedResult !== 'object') return '';
-  const r = decodedResult as { result?: { format?: number | string } };
-  const f = r.result?.format;
-  if (f === undefined || f === null) return '';
-  return String(f);
-}
-
 export function BarcodeScanPage() {
   const headingId = useId();
-  const [active, setActive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [scans, setScans] = useState<ScanLine[]>([]);
+  const [params] = useSearchParams();
+  const sessionId = (params.get('sessionId') ?? '').trim();
+
+  const [relayReady, setRelayReady] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [lastSent, setLastSent] = useState<string | null>(null);
   const lastRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const socketRef = useRef<Socket | null>(null);
 
-  const appendScan = useCallback((text: string, format: string) => {
-    const now = Date.now();
-    const prev = lastRef.current;
-    if (prev.text === text && now - prev.at < DEDUPE_MS) return;
-    lastRef.current = { text, at: now };
-    playScanFeedback();
-    setScans((s) => [{ text, format: format || '—', at: now }, ...s].slice(0, 80));
-  }, []);
+  const emitScan = useCallback((socket: Socket, text: string) => {
+    socket.emit(WS_SCAN, { sessionId, barcode: text });
+  }, [sessionId]);
+
+  const handleDecoded = useCallback(
+    (text: string, socket: Socket) => {
+      const now = Date.now();
+      const prev = lastRef.current;
+      if (prev.text === text && now - prev.at < DEDUPE_MS) return;
+      lastRef.current = { text, at: now };
+      if (!socket.connected) return;
+      playScanFeedback();
+      emitScan(socket, text);
+    },
+    [emitScan],
+  );
 
   useEffect(() => {
-    if (!active) return;
+    if (!sessionId) return;
+
+    const socket = createScannerSocket();
+    socketRef.current = socket;
+    let cancelled = false;
+
+    const join = () => {
+      setJoinError(null);
+      socket.emit(WS_JOIN_SESSION, { sessionId, type: 'mobile' as const });
+    };
+
+    socket.on('connect', () => {
+      if (cancelled) return;
+      setSocketConnected(true);
+      join();
+    });
+
+    socket.on('disconnect', () => {
+      if (cancelled) return;
+      setSocketConnected(false);
+      setRelayReady(false);
+    });
+
+    socket.on(WS_SESSION_READY, () => {
+      if (cancelled) return;
+      setRelayReady(true);
+    });
+
+    socket.on(WS_SESSION_ERROR, (p: { message?: string }) => {
+      if (cancelled) return;
+      setJoinError(
+        typeof p?.message === 'string' ? p.message : 'Could not join session',
+      );
+      setRelayReady(false);
+    });
+
+    socket.on(WS_SCAN_RECEIVED, (p: { barcode?: string }) => {
+      if (cancelled) return;
+      if (typeof p?.barcode === 'string') {
+        setLastSent(p.barcode);
+      }
+    });
+
+    socket.connect();
+
+    return () => {
+      cancelled = true;
+      socket.removeAllListeners();
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [sessionId]);
+
+  useEffect(() => {
+    if (!relayReady || !sessionId) return;
+
+    const socket = socketRef.current;
+    if (!socket) return;
 
     let cancelled = false;
     const elId = VIEWPORT_ID;
@@ -82,7 +156,7 @@ export function BarcodeScanPage() {
     scannerRef.current = scanner;
 
     const run = async () => {
-      setError(null);
+      setCameraError(null);
       try {
         await scanner.start(
           { facingMode: 'environment' },
@@ -90,19 +164,18 @@ export function BarcodeScanPage() {
             fps: 10,
             qrbox: (w, h) => ({
               width: Math.min(340, Math.floor(w * 0.92)),
-              height: Math.min(200, Math.floor(h * 0.38)),
+              height: Math.min(240, Math.floor(h * 0.42)),
             }),
           },
-          (decodedText, decodedResult) => {
+          (decodedText) => {
             if (cancelled) return;
-            appendScan(decodedText, formatLabel(decodedResult));
+            handleDecoded(decodedText, socket);
           },
           () => {},
         );
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Camera failed to start');
-          setActive(false);
+          setCameraError(e instanceof Error ? e.message : 'Camera failed');
         }
       }
     };
@@ -111,59 +184,75 @@ export function BarcodeScanPage() {
 
     return () => {
       cancelled = true;
-      const s = scannerRef.current;
       scannerRef.current = null;
-      if (!s) return;
-      void s
+      void scanner
         .stop()
-        .then(() => s.clear())
+        .then(() => scanner.clear())
         .catch(() => {});
     };
-  }, [active, appendScan]);
+  }, [relayReady, sessionId, handleDecoded]);
+
+  if (!sessionId) {
+    return (
+      <div className="barcodeScan barcodeScan--error" aria-labelledby={headingId}>
+        <h1 id={headingId} className="barcodeScan__title">
+          Invalid link
+        </h1>
+        <p className="barcodeScan__hint">
+          Open the QR code from the laptop &ldquo;Connect scanner&rdquo; page. The URL must include{' '}
+          <code className="barcodeScan__inlineCode">sessionId</code>.
+        </p>
+      </div>
+    );
+  }
+
+  if (joinError) {
+    return (
+      <div className="barcodeScan barcodeScan--error" aria-labelledby={headingId}>
+        <h1 id={headingId} className="barcodeScan__title">
+          Cannot connect
+        </h1>
+        <p className="barcodeScan__error">{joinError}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="barcodeScan" aria-labelledby={headingId}>
-      <header className="barcodeScan__header">
-        <h1 id={headingId} className="barcodeScan__title">
-          Scan
-        </h1>
-        <p className="barcodeScan__hint">Open this URL on your phone — no sign-in required.</p>
-      </header>
-
-      <div className="barcodeScan__stage">
-        <div id={VIEWPORT_ID} className="barcodeScan__viewport" />
-        {!active && (
-          <div className="barcodeScan__overlay">
-            <button type="button" className="barcodeScan__start" onClick={() => setActive(true)}>
-              Start camera
-            </button>
-            {error ? <p className="barcodeScan__error">{error}</p> : null}
-          </div>
-        )}
+    <div className="barcodeScan barcodeScan--relay" aria-labelledby={headingId}>
+      <div className="barcodeScan__relayBar" role="status">
+        <span
+          className={`barcodeScan__dot barcodeScan__dot--${
+            socketConnected ? 'on' : 'off'
+          }`}
+          aria-hidden
+        />
+        {socketConnected
+          ? relayReady
+            ? 'Live — point at a barcode'
+            : 'Joining session…'
+          : 'Reconnecting…'}
       </div>
 
-      {active ? (
-        <div className="barcodeScan__toolbar">
-          <button type="button" className="barcodeScan__stop" onClick={() => setActive(false)}>
-            Stop camera
-          </button>
-        </div>
-      ) : null}
+      <div className="barcodeScan__stage barcodeScan__stage--fullscreen">
+        <div id={VIEWPORT_ID} className="barcodeScan__viewport" />
+        {!relayReady ? (
+          <div className="barcodeScan__overlay">
+            <p className="barcodeScan__hint">Starting camera…</p>
+          </div>
+        ) : null}
+        {cameraError ? (
+          <div className="barcodeScan__overlay">
+            <p className="barcodeScan__error">{cameraError}</p>
+          </div>
+        ) : null}
+      </div>
 
-      <section className="barcodeScan__log" aria-label="Recent scans">
-        {scans.length === 0 ? (
-          <p className="barcodeScan__logEmpty">Scans appear here as you go — no popups.</p>
-        ) : (
-          <ul className="barcodeScan__list">
-            {scans.map((row) => (
-              <li key={`${row.at}-${row.text}`} className="barcodeScan__row">
-                <span className="barcodeScan__code">{row.text}</span>
-                <span className="barcodeScan__fmt">{row.format}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {lastSent ? (
+        <footer className="barcodeScan__footer">
+          <span className="barcodeScan__footerLabel">Last sent</span>
+          <span className="barcodeScan__footerCode">{lastSent}</span>
+        </footer>
+      ) : null}
     </div>
   );
 }
