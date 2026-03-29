@@ -18,7 +18,10 @@ import { AuthLayout } from '../layouts/AuthLayout';
 import './LoginPage.css';
 
 type LocationState = { from?: string; needFirebase?: boolean };
-type AuthTab = 'email' | 'phone' | 'google';
+/** Sign-in methods shown left-to-right: SSO (Google), then email, then phone. */
+type AuthTab = 'google' | 'email' | 'phone';
+
+const LOGIN_METHOD_TABS: readonly AuthTab[] = ['google', 'email', 'phone'];
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -33,7 +36,7 @@ export function LoginPage() {
   const phoneId = useId();
   const otpId = useId();
 
-  const [tab, setTab] = useState<AuthTab>('email');
+  const [tab, setTab] = useState<AuthTab>('google');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -176,7 +179,7 @@ export function LoginPage() {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in with email & password, phone OTP, or Google — all powered by Firebase."
+      subtitle="Sign in with Google (SSO), email & password, or phone OTP — powered by Firebase."
       footer={
         <>
           <span className="login__footerLead">New here?</span>{' '}
@@ -190,8 +193,8 @@ export function LoginPage() {
         <div className="login__banner login__banner--error" role="alert">
           <strong>Firebase is not configured.</strong> Add{' '}
           <code className="login__code">VITE_FIREBASE_*</code> keys to <code className="login__code">.env</code> and restart
-          Vite. In Firebase Console enable <strong>Email/Password</strong>, <strong>Phone</strong>, and <strong>Google</strong>{' '}
-          under Authentication → Sign-in method.
+          Vite. In Firebase Console enable <strong>Google</strong> (SSO), <strong>Email/Password</strong>, and{' '}
+          <strong>Phone</strong> under Authentication → Sign-in method.
         </div>
       ) : null}
 
@@ -213,22 +216,37 @@ export function LoginPage() {
       ) : null}
 
       <div className="login__tabs" role="tablist" aria-label="Sign-in method">
-        {(['email', 'phone', 'google'] as const).map((t) => (
+        {LOGIN_METHOD_TABS.map((t) => (
           <button
             key={t}
             type="button"
             role="tab"
             aria-selected={tab === t}
+            aria-label={t === 'google' ? 'Google (single sign-on)' : undefined}
             className={`login__tab${tab === t ? ' login__tab--active' : ''}`}
             onClick={() => setTab(t)}
             disabled={!firebaseConfigured || loading}
           >
-            {t === 'email' ? 'Email' : t === 'phone' ? 'Phone' : 'Google'}
+            {t === 'google' ? 'SSO' : t === 'email' ? 'Email' : 'Phone'}
           </button>
         ))}
       </div>
 
       <div className="login__tabPanel">
+        {tab === 'google' ? (
+          <div className="login__firebaseActions">
+            <GoogleSignInButton
+              label="Continue with Google"
+              busy={busy}
+              disabled={!firebaseConfigured || loading}
+              onClick={onGoogleClick}
+            />
+            <p className="login__hint" style={{ marginTop: '0.75rem', textAlign: 'center' }}>
+              Single sign-on with your Google account.
+            </p>
+          </div>
+        ) : null}
+
         {tab === 'email' ? (
           <form className="login__form" onSubmit={onEmailSubmit} noValidate>
             <div className="login__field">
@@ -358,17 +376,6 @@ export function LoginPage() {
                 </button>
               </>
             )}
-          </div>
-        ) : null}
-
-        {tab === 'google' ? (
-          <div className="login__firebaseActions">
-            <GoogleSignInButton
-              label="Continue with Google"
-              busy={busy}
-              disabled={!firebaseConfigured || loading}
-              onClick={onGoogleClick}
-            />
           </div>
         ) : null}
       </div>
