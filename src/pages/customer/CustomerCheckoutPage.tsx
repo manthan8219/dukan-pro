@@ -31,6 +31,8 @@ export function CustomerCheckoutPage() {
     landmark: '',
     city: '',
     pin: '',
+    latitude: null,
+    longitude: null,
   });
 
   useEffect(() => {

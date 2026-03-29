@@ -13,6 +13,8 @@ export type UserDeliveryAddressDto = {
   tag: AddressTag;
   label: string;
   isDefault: boolean;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type CreateUserDeliveryAddressPayload = {
@@ -26,6 +28,8 @@ export type CreateUserDeliveryAddressPayload = {
   tag: AddressTag;
   label?: string;
   setAsDefault?: boolean;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type UpdateUserDeliveryAddressPayload = Partial<CreateUserDeliveryAddressPayload>;

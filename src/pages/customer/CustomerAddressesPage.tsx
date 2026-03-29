@@ -1,5 +1,14 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
+import type { MapLocateEvent } from '../../components/map';
+import { MapPinAddressSelect } from '../../components/map/MapPinAddressSelect';
+import {
+  FALLBACK_MAP_CENTER,
+  getCachedDeviceCoordinates,
+  rememberDeviceCoordinates,
+  requestDeviceCoordinates,
+} from '../../geo/deviceLocation';
 import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
 import type { AddressTag, DeliveryAddress, SavedAddress } from './customerDeliveryTypes';
 import { deliverySummaryLine } from './customerDeliveryTypes';
@@ -13,6 +22,8 @@ const emptyAddr: DeliveryAddress = {
   landmark: '',
   city: '',
   pin: '',
+  latitude: null,
+  longitude: null,
 };
 
 function toFields(s: SavedAddress): DeliveryAddress {
@@ -30,12 +41,33 @@ export function CustomerAddressesPage() {
   const [customLabel, setCustomLabel] = useState('');
   const [fields, setFields] = useState<DeliveryAddress>({ ...emptyAddr });
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const [mapPinLat, setMapPinLat] = useState(FALLBACK_MAP_CENTER.latitude);
+  const [mapPinLng, setMapPinLng] = useState(FALLBACK_MAP_CENTER.longitude);
+  const [pinLocationConfirmed, setPinLocationConfirmed] = useState(false);
+  const [pinLocationLabel, setPinLocationLabel] = useState('');
+  const [geoHint, setGeoHint] = useState<string | null>(null);
+  const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
+  const skipAccuracyResetCountRef = useRef(0);
+
+  const resetMapForNewAddress = useCallback(() => {
+    const c = getCachedDeviceCoordinates();
+    setMapPinLat(c?.latitude ?? FALLBACK_MAP_CENTER.latitude);
+    setMapPinLng(c?.longitude ?? FALLBACK_MAP_CENTER.longitude);
+    setPinLocationConfirmed(false);
+    setPinLocationLabel('');
+    setGeoHint(null);
+    setLocAccuracyM(null);
+  }, []);
 
   function openAdd() {
     setEditingId(null);
     setTag('home');
     setCustomLabel('');
     setFields({ ...emptyAddr });
+    setFormError(null);
+    resetMapForNewAddress();
     setShowForm(true);
   }
 
@@ -44,13 +76,87 @@ export function CustomerAddressesPage() {
     setTag(s.tag);
     setCustomLabel(s.tag === 'other' ? s.label : '');
     setFields(toFields(s));
+    setFormError(null);
+    if (
+      s.latitude != null &&
+      s.longitude != null &&
+      Number.isFinite(s.latitude) &&
+      Number.isFinite(s.longitude)
+    ) {
+      setMapPinLat(s.latitude);
+      setMapPinLng(s.longitude);
+      setPinLocationConfirmed(true);
+      setPinLocationLabel(s.landmark?.trim() ? s.landmark.trim() : 'Saved map pin');
+    } else {
+      resetMapForNewAddress();
+    }
     setShowForm(true);
   }
 
   function closeForm() {
     setShowForm(false);
     setEditingId(null);
+    setFormError(null);
   }
+
+  useEffect(() => {
+    if (!showForm || editingId) return;
+    let cancelled = false;
+    void requestDeviceCoordinates({ preferHighAccuracy: false }).then((p) => {
+      if (cancelled || !p) return;
+      skipAccuracyResetCountRef.current = 4;
+      setMapPinLat(p.latitude);
+      setMapPinLng(p.longitude);
+      setPinLocationConfirmed(false);
+      setPinLocationLabel('');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showForm, editingId]);
+
+  const onMapCenterChange = useCallback((lat: number, lng: number) => {
+    setMapPinLat(lat);
+    setMapPinLng(lng);
+    setPinLocationConfirmed(false);
+    if (skipAccuracyResetCountRef.current > 0) {
+      skipAccuracyResetCountRef.current -= 1;
+      return;
+    }
+    setLocAccuracyM(null);
+  }, []);
+
+  const onMapDeviceLocation = useCallback((ev: MapLocateEvent) => {
+    if (ev.kind === 'request') {
+      setGeoHint('Allow location when prompted — we centre the map on you.');
+      return;
+    }
+    if (ev.kind === 'success') {
+      skipAccuracyResetCountRef.current = 4;
+      setPinLocationConfirmed(false);
+      setMapPinLat(ev.latitude);
+      setMapPinLng(ev.longitude);
+      rememberDeviceCoordinates(ev.latitude, ev.longitude);
+      setLocAccuracyM(ev.accuracyMeters);
+      setGeoHint('Map centred on you — drag so the pin sits on your door or gate.');
+      return;
+    }
+    skipAccuracyResetCountRef.current = 0;
+    setLocAccuracyM(null);
+    if (ev.code === 'unsupported') {
+      setGeoHint('GPS not available. Drag the map until the pin is on your address.');
+      return;
+    }
+    if (ev.code === 1) {
+      setGeoHint('Location blocked — allow it in the site settings, or drag the map manually.');
+    } else if (ev.code === 2) {
+      setGeoHint('Position unavailable. Drag the map to your address.');
+    } else if (ev.code === 3) {
+      setGeoHint('Location timed out. Drag the map to your address.');
+    } else {
+      setGeoHint('Could not read location. Drag the map to your address.');
+    }
+  }, []);
 
   function updateField<K extends keyof DeliveryAddress>(key: K, value: DeliveryAddress[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
@@ -60,6 +166,11 @@ export function CustomerAddressesPage() {
     async (e: React.FormEvent) => {
       e.preventDefault();
       const labelForOther = customLabel.trim() || 'Other';
+      setFormError(null);
+      if (!pinLocationConfirmed || !Number.isFinite(mapPinLat) || !Number.isFinite(mapPinLng)) {
+        setFormError('Place the pin on the map at your delivery spot, then tap Confirm pin.');
+        return;
+      }
       setSaving(true);
       try {
         if (editingId) {
@@ -67,22 +178,36 @@ export function CustomerAddressesPage() {
             ...fields,
             tag,
             label: tag === 'other' ? labelForOther : undefined,
+            latitude: mapPinLat,
+            longitude: mapPinLng,
           });
         } else {
           await addSavedAddress({
             tag,
             label: tag === 'other' ? labelForOther : tag === 'home' ? 'Home' : 'Office',
             ...fields,
+            latitude: mapPinLat,
+            longitude: mapPinLng,
           });
         }
         closeForm();
       } catch {
-        /* surfaced via error state on next load; could toast */
+        setFormError('Could not save. Check your connection and try again.');
       } finally {
         setSaving(false);
       }
     },
-    [editingId, fields, tag, customLabel, updateSavedAddress, addSavedAddress],
+    [
+      editingId,
+      fields,
+      tag,
+      customLabel,
+      pinLocationConfirmed,
+      mapPinLat,
+      mapPinLng,
+      updateSavedAddress,
+      addSavedAddress,
+    ],
   );
 
   async function selectForDelivery(id: string) {
@@ -106,8 +231,8 @@ export function CustomerAddressesPage() {
     <>
       <h2 className="cust__pageTitle">Delivery addresses</h2>
       <p className="cust__sub">
-        Save Home, Office, or custom tags. The one marked <strong>Active</strong> is used at checkout and in the header.
-        Addresses are stored on your account.
+        Choose a tag (Home, Office, or custom), <strong>pin the spot on the map</strong>, then fill in the details. The
+        address marked <strong>Active</strong> is used at checkout and in the header.
       </p>
       {error ? (
         <p className="cust__sub" role="alert" style={{ color: 'var(--cust-danger, #c62828)' }}>
@@ -121,7 +246,7 @@ export function CustomerAddressesPage() {
         ) : book.addresses.length === 0 ? (
           <div className="cust__panel cust__addrEmpty">
             <p className="cust__sub" style={{ marginBottom: '0.75rem' }}>
-              No addresses yet. Add your first one to see delivery options at checkout.
+              No addresses yet. Add your first one — you’ll drop a pin on the map and save your details.
             </p>
             <button type="button" className="cust__btn cust__btn--primary cust__btn--block" onClick={openAdd}>
               Add address
@@ -130,6 +255,8 @@ export function CustomerAddressesPage() {
         ) : (
           book.addresses.map((s) => {
             const active = book.selectedId === s.id;
+            const hasPin =
+              s.latitude != null && s.longitude != null && Number.isFinite(s.latitude) && Number.isFinite(s.longitude);
             return (
               <div key={s.id} className={`cust__addrCard${active ? ' cust__addrCard--active' : ''}`}>
                 <div className="cust__addrCardTop">
@@ -137,6 +264,11 @@ export function CustomerAddressesPage() {
                   {active ? <span className="cust__addrActivePill">Active for delivery</span> : null}
                 </div>
                 <p className="cust__addrLines">{deliverySummaryLine(toFields(s))}</p>
+                {hasPin ? (
+                  <p className="cust__addrMapHint" style={{ marginTop: '-0.25rem', marginBottom: '0.5rem' }}>
+                    Map location saved for this address.
+                  </p>
+                ) : null}
                 <p className="cust__addrPerson">
                   {s.fullName || '—'} · {s.phone || '—'}
                 </p>
@@ -207,6 +339,48 @@ export function CustomerAddressesPage() {
                 placeholder="Name this address"
               />
             </>
+          ) : null}
+
+          <div className="cust__addrMapSection">
+            <p className="cust__addrMapTitle">Pin on map</p>
+            <p className="cust__addrMapHint">
+              The <strong>teal pin stays in the centre</strong> — drag the map so it marks your door or gate. Then tap{' '}
+              <strong>Confirm pin</strong>.
+            </p>
+            <MapPinAddressSelect
+              className="cust__addrMapPick"
+              latitude={mapPinLat}
+              longitude={mapPinLng}
+              locationConfirmed={pinLocationConfirmed}
+              confirmedLabel={pinLocationLabel}
+              onSelectLocation={(label) => {
+                setPinLocationLabel(label);
+                setPinLocationConfirmed(true);
+              }}
+              selectButtonText="Confirm pin"
+              variant="wiz"
+            />
+            {geoHint ? <p className="cust__addrMapHint">{geoHint}</p> : null}
+            <div className="cust__addrMapWrap">
+              <GoogleMapsEmbedMapPicker
+                className="cust__mapPicker"
+                latitude={mapPinLat}
+                longitude={mapPinLng}
+                accuracyMeters={locAccuracyM}
+                onCenterChange={onMapCenterChange}
+                initialZoom={16}
+                mapAriaLabel="Map: drag so the centre pin is on your delivery address"
+                hintText="Drag the map — pin marks delivery point · pinch or controls to zoom"
+                useMyLocationLabel="Use my location"
+                onDeviceLocation={onMapDeviceLocation}
+              />
+            </div>
+          </div>
+
+          {formError ? (
+            <p className="cust__bannerNote cust__bannerNote--err" role="alert" style={{ marginBottom: '0.85rem' }}>
+              {formError}
+            </p>
           ) : null}
 
           <label className="cust__label" htmlFor={`${formId}-name`}>

@@ -12,6 +12,7 @@ import {
   deleteUserDeliveryAddress,
   listUserDeliveryAddresses,
   updateUserDeliveryAddress,
+  type CreateUserDeliveryAddressPayload,
 } from '../../api/userDeliveryAddresses';
 import type { AddressBook, AddressTag, DeliveryAddress, SavedAddress } from './customerDeliveryTypes';
 import {
@@ -145,6 +146,11 @@ export function CustomerDeliveryAddressesProvider({
 
   const addSavedAddress = useCallback(
     async (entry: Omit<SavedAddress, 'id'> & { id?: string }): Promise<SavedAddress> => {
+      const hasPin =
+        entry.latitude != null &&
+        entry.longitude != null &&
+        Number.isFinite(entry.latitude) &&
+        Number.isFinite(entry.longitude);
       const created = await createUserDeliveryAddress(userId, {
         fullName: entry.fullName,
         phone: entry.phone,
@@ -156,6 +162,9 @@ export function CustomerDeliveryAddressesProvider({
         tag: entry.tag,
         label: entry.tag === 'other' ? entry.label : undefined,
         setAsDefault: true,
+        ...(hasPin
+          ? { latitude: entry.latitude!, longitude: entry.longitude! }
+          : {}),
       });
       await refresh();
       notifyDeliveryUpdated();
@@ -170,6 +179,8 @@ export function CustomerDeliveryAddressesProvider({
         landmark: created.landmark,
         city: created.city,
         pin: created.pin,
+        latitude: created.latitude,
+        longitude: created.longitude,
       };
     },
     [userId, refresh],
@@ -187,6 +198,17 @@ export function CustomerDeliveryAddressesProvider({
       if (patch.pin !== undefined) body.pin = patch.pin;
       if (patch.tag !== undefined) body.tag = patch.tag;
       if (patch.label !== undefined) body.label = patch.label;
+      if (
+        patch.latitude !== undefined &&
+        patch.longitude !== undefined &&
+        patch.latitude != null &&
+        patch.longitude != null &&
+        Number.isFinite(patch.latitude) &&
+        Number.isFinite(patch.longitude)
+      ) {
+        body.latitude = patch.latitude;
+        body.longitude = patch.longitude;
+      }
       await updateUserDeliveryAddress(userId, id, body);
       await refresh();
       notifyDeliveryUpdated();
@@ -207,6 +229,11 @@ export function CustomerDeliveryAddressesProvider({
     async (a: DeliveryAddress) => {
       const sel = getSelectedSavedAddress();
       if (sel) {
+        const pinOk =
+          a.latitude != null &&
+          a.longitude != null &&
+          Number.isFinite(a.latitude) &&
+          Number.isFinite(a.longitude);
         await updateSavedAddress(sel.id, {
           fullName: a.fullName,
           phone: a.phone,
@@ -215,9 +242,15 @@ export function CustomerDeliveryAddressesProvider({
           landmark: a.landmark,
           city: a.city,
           pin: a.pin,
+          ...(pinOk ? { latitude: a.latitude, longitude: a.longitude } : {}),
         });
       } else {
-        await createUserDeliveryAddress(userId, {
+        const pinOk =
+          a.latitude != null &&
+          a.longitude != null &&
+          Number.isFinite(a.latitude) &&
+          Number.isFinite(a.longitude);
+        const body: CreateUserDeliveryAddressPayload = {
           fullName: a.fullName,
           phone: a.phone,
           line1: a.line1,
@@ -227,7 +260,12 @@ export function CustomerDeliveryAddressesProvider({
           pin: a.pin,
           tag: 'home',
           setAsDefault: true,
-        });
+        };
+        if (pinOk) {
+          body.latitude = a.latitude!;
+          body.longitude = a.longitude!;
+        }
+        await createUserDeliveryAddress(userId, body);
         await refresh();
         notifyDeliveryUpdated();
       }

@@ -933,6 +933,42 @@
   text-align: center;
 }
 
+.cust__addrMapSection {
+  margin-bottom: 1rem;
+}
+
+.cust__addrMapTitle {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cust-muted);
+}
+
+.cust__addrMapWrap {
+  position: relative;
+  height: 260px;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  border: 2px solid var(--cust-input-border);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+
+.cust__addrMapWrap .gmem {
+  height: 100%;
+  min-height: 0;
+}
+
+.cust__addrMapHint {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--cust-muted);
+  line-height: 1.45;
+}
+
 .cust__addrCard {
   background: var(--cust-surface);
   border-radius: 16px;

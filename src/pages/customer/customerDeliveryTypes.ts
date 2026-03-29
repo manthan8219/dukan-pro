@@ -9,6 +9,9 @@ export type DeliveryAddress = {
   landmark: string;
   city: string;
   pin: string;
+  /** WGS84; null until set from map or API */
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type AddressTag = 'home' | 'office' | 'other';
@@ -25,6 +28,11 @@ export type AddressBook = {
   selectedId: string | null;
 };
 
+function normalizeCoord(v: unknown): number | null {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+  return v;
+}
+
 function normalizeDelivery(p: Partial<DeliveryAddress>): DeliveryAddress {
   return {
     fullName: typeof p.fullName === 'string' ? p.fullName : '',
@@ -34,6 +42,8 @@ function normalizeDelivery(p: Partial<DeliveryAddress>): DeliveryAddress {
     landmark: typeof p.landmark === 'string' ? p.landmark : '',
     city: typeof p.city === 'string' ? p.city : '',
     pin: typeof p.pin === 'string' ? p.pin : '',
+    latitude: normalizeCoord(p.latitude),
+    longitude: normalizeCoord(p.longitude),
   };
 }
 
@@ -80,6 +90,8 @@ function migrateLegacyBook(): AddressBook | null {
       tag: 'home',
       label: 'Home',
       ...body,
+      latitude: body.latitude,
+      longitude: body.longitude,
     };
     return { addresses: [saved], selectedId: id };
   } catch {
@@ -141,6 +153,8 @@ export function bookFromApiRows(
     tag: AddressTag;
     label: string;
     isDefault: boolean;
+    latitude?: number | null;
+    longitude?: number | null;
   }>,
 ): AddressBook {
   const addresses: SavedAddress[] = rows.map((r) => ({
@@ -154,6 +168,10 @@ export function bookFromApiRows(
     landmark: r.landmark,
     city: r.city,
     pin: r.pin,
+    latitude:
+      r.latitude != null && Number.isFinite(r.latitude) ? r.latitude : null,
+    longitude:
+      r.longitude != null && Number.isFinite(r.longitude) ? r.longitude : null,
   }));
   const selectedId =
     rows.find((r) => r.isDefault)?.id ?? addresses[0]?.id ?? null;
