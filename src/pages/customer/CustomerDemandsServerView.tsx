@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   acceptDemandQuotation,
   closeCustomerDemand,
@@ -24,11 +24,27 @@ import {
   rememberDeviceCoordinates,
 } from '../../geo/deviceLocation';
 import { MIN_ORDER_TO_POST_RUPEES } from '../../demands/demandsStorage';
+import type { CartLine } from './cartContext';
+import { useCustomerCart } from './cartContext';
 import '../../demands/demands.css';
 import '../customer/customer-app.css';
 
 function formatInrRupees(n: number): string {
   return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 0 })}`;
+}
+
+function quotedLinesToCart(q: CustomerDemandQuotation): CartLine[] {
+  const items = q.quotedLineItems ?? [];
+  return items.map((li) => ({
+    shopId: q.shopId,
+    shopName: q.shopDisplayName,
+    shopProductId: li.shopProductId,
+    productId: li.shopProductId,
+    title: li.productNameSnapshot,
+    unitPrice: li.unitPriceMinor / 100,
+    qty: li.quantity,
+    unit: li.unit || 'PIECE',
+  }));
 }
 
 function statusClass(s: CustomerDemandRecord['status']): string {
@@ -39,6 +55,8 @@ function statusClass(s: CustomerDemandRecord['status']): string {
 }
 
 export function CustomerDemandsServerView({ serverUserId }: { serverUserId: string }) {
+  const navigate = useNavigate();
+  const { replaceCart } = useCustomerCart();
   const [searchParams, setSearchParams] = useSearchParams();
   const titleId = useId();
   const detailsId = useId();
@@ -315,6 +333,13 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     }
   }
 
+  function goToCheckoutFromQuotation(q: CustomerDemandQuotation) {
+    const lines = quotedLinesToCart(q);
+    if (lines.length === 0) return;
+    replaceCart(lines);
+    navigate('/app/customer/checkout', { state: { demandInvitationId: q.invitationId } });
+  }
+
   async function onAcceptQuotation(demandId: string, invitationId: string, shopName: string) {
     if (
       !window.confirm(
@@ -359,7 +384,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       <p className="cust__sub">
         Your request is saved securely. Pick the delivery spot on the map; when you publish, nearby shops that can reach
         that point can reply with a quotation. When you have multiple quotes, open <strong>View quotations</strong> and
-        tap <strong>Choose this shop</strong> on the offer you want. Receipt total must be ≥{' '}
+        tap <strong>Choose this shop</strong>. If the seller attached product lines, use{' '}
+        <strong>Go to checkout</strong> to pay — the request closes after you place the order. Receipt total must be ≥{' '}
         {formatInrRupees(MIN_ORDER_TO_POST_RUPEES)}.
       </p>
 
@@ -576,7 +602,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
             {d.status === 'AWARDED' && d.awardedShopDisplayName ? (
               <div className="dm__panel" style={{ marginTop: '0.65rem', marginBottom: 0 }}>
                 <p className="dm__cardMeta" style={{ margin: 0 }}>
-                  You chose: <strong>{d.awardedShopDisplayName}</strong>. Coordinate delivery or checkout with them
+                  You chose: <strong>{d.awardedShopDisplayName}</strong>. Open <strong>View quotations</strong> and use{' '}
+                  <strong>Go to checkout</strong> on their quote if they listed products; otherwise coordinate with the shop
                   directly.
                 </p>
               </div>
@@ -636,6 +663,25 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
                         <p className="dm__cardBody" style={{ marginBottom: '0.35rem', marginTop: '0.35rem' }}>
                           {q.quotationText}
                         </p>
+                        {(q.quotedLineItems?.length ?? 0) > 0 ? (
+                          <ul
+                            className="dm__cardMeta"
+                            style={{ margin: '0 0 0.5rem', paddingLeft: '1.1rem', lineHeight: 1.45 }}
+                          >
+                            {q.quotedLineItems!.map((li) => (
+                              <li key={`${q.invitationId}-${li.shopProductId}-${li.quantity}`}>
+                                {li.productNameSnapshot} × {li.quantity}
+                                {li.unit ? ` ${li.unit}` : ''} —{' '}
+                                {formatInrRupees((li.unitPriceMinor * li.quantity) / 100)} (at quote)
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="dm__cardMeta" style={{ marginBottom: '0.35rem' }}>
+                            No product lines on this quote — checkout in the app isn’t available; coordinate with the shop
+                            directly.
+                          </p>
+                        )}
                         {q.quotationDocumentUrl ? (
                           <a href={q.quotationDocumentUrl} className="dm__link" target="_blank" rel="noreferrer">
                             View attached bill / PDF
@@ -644,17 +690,29 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
                         <p className="dm__cardMeta" style={{ marginTop: '0.35rem', marginBottom: 0 }}>
                           {new Date(q.respondedAt).toLocaleString()}
                         </p>
-                        {d.status === 'LIVE' ? (
-                          <button
-                            type="button"
-                            className="dm__btn dm__btn--good dm__btn--sm"
-                            style={{ marginTop: '0.5rem' }}
-                            disabled={busy || accepting}
-                            onClick={() => void onAcceptQuotation(d.id, q.invitationId, q.shopDisplayName)}
-                          >
-                            {accepting ? 'Saving…' : 'Choose this shop'}
-                          </button>
-                        ) : null}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          {d.status === 'LIVE' ? (
+                            <button
+                              type="button"
+                              className="dm__btn dm__btn--good dm__btn--sm"
+                              disabled={busy || accepting}
+                              onClick={() => void onAcceptQuotation(d.id, q.invitationId, q.shopDisplayName)}
+                            >
+                              {accepting ? 'Saving…' : 'Choose this shop'}
+                            </button>
+                          ) : null}
+                          {d.status === 'AWARDED' &&
+                          isChosen &&
+                          (q.quotedLineItems?.length ?? 0) > 0 ? (
+                            <button
+                              type="button"
+                              className="dm__btn dm__btn--primary dm__btn--sm"
+                              onClick={() => goToCheckoutFromQuotation(q)}
+                            >
+                              Go to checkout
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })

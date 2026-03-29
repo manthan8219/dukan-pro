@@ -9,6 +9,7 @@ import {
   submitDemandQuotation,
   type ShopDemandInvitation,
 } from '../../api/demandInvitations';
+import { listShopProducts, type ShopProductListing } from '../../api/shopProducts';
 import { NOTIFICATIONS_CHANGED_EVENT } from '../../api/notifications';
 import { SELLER_PENDING_INVITES_CHANGED_EVENT } from '../../hooks/useSellerNotificationCounts';
 import { loadBillingProfile } from './billingStorage';
@@ -36,6 +37,10 @@ export function SellerDemandBoardPage() {
   const [billUrl, setBillUrl] = useState<Record<string, string>>({});
   const [billContentId, setBillContentId] = useState<Record<string, string>>({});
   const [storageUploadsEnabled, setStorageUploadsEnabled] = useState(false);
+  const [listings, setListings] = useState<ShopProductListing[]>([]);
+  const [quoteDraftLines, setQuoteDraftLines] = useState<
+    Record<string, { shopProductId: string; qty: string }[]>
+  >({});
   const billFileInputRef = useRef<HTMLInputElement | null>(null);
   const billFileInviteIdRef = useRef<string | null>(null);
 
@@ -58,6 +63,26 @@ export function SellerDemandBoardPage() {
   useEffect(() => {
     void fetchStorageUploadEnabled().then(setStorageUploadsEnabled);
   }, []);
+
+  useEffect(() => {
+    if (!shopId) return;
+    const ac = new AbortController();
+    void listShopProducts(shopId, ac.signal, true)
+      .then(setListings)
+      .catch(() => setListings([]));
+    return () => ac.abort();
+  }, [shopId]);
+
+  function draftFor(invitationId: string): { shopProductId: string; qty: string }[] {
+    return quoteDraftLines[invitationId] ?? [{ shopProductId: '', qty: '1' }];
+  }
+
+  function setDraftFor(
+    invitationId: string,
+    lines: { shopProductId: string; qty: string }[],
+  ) {
+    setQuoteDraftLines((p) => ({ ...p, [invitationId]: lines }));
+  }
 
   useEffect(() => {
     const inviteId = searchParams.get('invite');
@@ -138,11 +163,21 @@ export function SellerDemandBoardPage() {
         });
         docId = c.id;
       }
+      const rawLines = draftFor(inv.invitationId);
+      const lineItems = rawLines
+        .filter((r) => r.shopProductId.trim() !== '')
+        .map((r) => {
+          const q = Math.max(1, Math.floor(Number(r.qty) || 0));
+          return { shopProductId: r.shopProductId.trim(), quantity: q };
+        })
+        .filter((r) => r.quantity >= 1);
       await submitDemandQuotation(shopId!, inv.invitationId, {
         quotationText: text,
         quotationDocumentContentId: docId,
+        ...(lineItems.length > 0 ? { lineItems } : {}),
       });
       setQuoteText((q) => ({ ...q, [inv.invitationId]: '' }));
+      setDraftFor(inv.invitationId, [{ shopProductId: '', qty: '1' }]);
       setBillUrl((b) => ({ ...b, [inv.invitationId]: '' }));
       setBillContentId((b) => {
         const next = { ...b };
@@ -184,6 +219,7 @@ export function SellerDemandBoardPage() {
         <p className="dm__lead" style={{ marginBottom: 0 }}>
           Customer requests published near <strong>{shopNameDefault}</strong> (you were inside their delivery radius).
           Reject or send a quotation with an optional bill, PDF, or quote image {storageUploadsEnabled ? '(upload or https link)' : '(https link — enable server storage for uploads)'}.
+          Add <strong>catalog lines</strong> so the customer can check out in the app after they accept your quote.
         </p>
       </div>
 
@@ -273,6 +309,77 @@ export function SellerDemandBoardPage() {
                     Reject
                   </button>
                 </div>
+                <label className="dm__label">Products in quote (for in-app checkout)</label>
+                <p className="dm__hint" style={{ marginBottom: '0.5rem' }}>
+                  Optional but recommended: listed SKUs and quantities are locked in for the buyer’s basket after they
+                  choose you.
+                </p>
+                {draftFor(inv.invitationId).map((row, idx) => (
+                  <div
+                    key={`${inv.invitationId}-line-${idx}`}
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '0.35rem',
+                      alignItems: 'center',
+                      marginBottom: '0.35rem',
+                    }}
+                  >
+                    <select
+                      className="dm__input"
+                      style={{ flex: '1 1 200px', marginBottom: 0 }}
+                      value={row.shopProductId}
+                      onChange={(e) => {
+                        const next = [...draftFor(inv.invitationId)];
+                        next[idx] = { ...next[idx]!, shopProductId: e.target.value };
+                        setDraftFor(inv.invitationId, next);
+                      }}
+                    >
+                      <option value="">Select listing…</option>
+                      {listings
+                        .filter((l) => l.isListed)
+                        .map((l) => (
+                          <option key={l.id} value={l.id}>
+                            {l.productName} — ₹{(l.priceMinor / 100).toFixed(0)}
+                          </option>
+                        ))}
+                    </select>
+                    <input
+                      className="dm__input"
+                      style={{ width: 72, marginBottom: 0 }}
+                      type="number"
+                      min={1}
+                      inputMode="numeric"
+                      value={row.qty}
+                      onChange={(e) => {
+                        const next = [...draftFor(inv.invitationId)];
+                        next[idx] = { ...next[idx]!, qty: e.target.value };
+                        setDraftFor(inv.invitationId, next);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="dm__btn dm__btn--ghost dm__btn--sm"
+                      disabled={draftFor(inv.invitationId).length <= 1}
+                      onClick={() => {
+                        const next = draftFor(inv.invitationId).filter((_, j) => j !== idx);
+                        setDraftFor(inv.invitationId, next.length ? next : [{ shopProductId: '', qty: '1' }]);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="dm__btn dm__btn--ghost dm__btn--sm"
+                  style={{ marginBottom: '0.65rem' }}
+                  onClick={() =>
+                    setDraftFor(inv.invitationId, [...draftFor(inv.invitationId), { shopProductId: '', qty: '1' }])
+                  }
+                >
+                  Add line
+                </button>
                 <label className="dm__label">Your quotation (required)</label>
                 <textarea
                   className="dm__textarea"

@@ -17,7 +17,7 @@ const OPTIONS: { id: PayMethod; icon: string; title: string; sub: string }[] = [
   { id: 'cod', icon: '💵', title: 'Cash on delivery', sub: 'Pay when you receive' },
 ];
 
-type PaymentLocationState = { deliveryAddressId?: string };
+type PaymentLocationState = { deliveryAddressId?: string; demandInvitationId?: string };
 
 export function CustomerPaymentPage() {
   const navigate = useNavigate();
@@ -32,10 +32,10 @@ export function CustomerPaymentPage() {
   const fee = useMemo(() => (subtotal >= FREE_ABOVE ? 0 : DELIVERY_FEE), [subtotal]);
   const total = subtotal + fee;
 
+  const locState = location.state as PaymentLocationState | null;
   const deliveryAddressId =
-    (location.state as PaymentLocationState | null)?.deliveryAddressId ??
-    getSelectedSavedAddress()?.id ??
-    null;
+    locState?.deliveryAddressId ?? getSelectedSavedAddress()?.id ?? null;
+  const demandInvitationId = locState?.demandInvitationId;
 
   async function placeOrder() {
     setError(null);
@@ -64,6 +64,7 @@ export function CustomerPaymentPage() {
           shopProductId: l.shopProductId!,
           quantity: l.qty,
         })),
+        ...(demandInvitationId ? { demandInvitationId } : {}),
       });
       clearCart();
       navigate('/app/customer', { replace: true, state: { orderPlaced: true } });
@@ -92,6 +93,12 @@ export function CustomerPaymentPage() {
       <h2 className="cust__pageTitle">Payment</h2>
       <p className="cust__sub">
         Pick a method. Orders are created on the server (one order per shop if your basket has multiple shops).
+        {demandInvitationId ? (
+          <>
+            {' '}
+            This payment completes your <strong>quotation order</strong> and closes the request.
+          </>
+        ) : null}
       </p>
 
       {!deliveryAddressId ? (

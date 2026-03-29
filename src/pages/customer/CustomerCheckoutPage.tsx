@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCustomerDeliveryAddresses } from './customerDeliveryAddressesContext';
 import type { DeliveryAddress, SavedAddress } from './customerDeliveryTypes';
 import { useCustomerCart } from './cartContext';
+
+export type CustomerCheckoutLocationState = {
+  demandInvitationId?: string;
+};
 
 const DELIVERY_FEE = 40;
 const FREE_ABOVE = 499;
@@ -20,6 +24,9 @@ function stripSaved(s: SavedAddress): DeliveryAddress {
 
 export function CustomerCheckoutPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const demandInvitationId =
+    (location.state as CustomerCheckoutLocationState | null)?.demandInvitationId ?? undefined;
   const { lines, subtotal } = useCustomerCart();
   const { book, updateSavedAddress, saveDeliveryAddress } = useCustomerDeliveryAddresses();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -62,7 +69,10 @@ export function CustomerCheckoutPage() {
       deliveryAddressId = await saveDeliveryAddress(addr);
     }
     navigate('/app/customer/checkout/payment', {
-      state: { deliveryAddressId },
+      state: {
+        deliveryAddressId,
+        ...(demandInvitationId ? { demandInvitationId } : {}),
+      },
     });
   }
 
@@ -81,6 +91,21 @@ export function CustomerCheckoutPage() {
   return (
     <>
       <span className="cust__mockPill">Sample checkout</span>
+      {demandInvitationId ? (
+        <p
+          className="cust__sub"
+          style={{
+            marginBottom: '0.75rem',
+            padding: '0.65rem 0.85rem',
+            borderRadius: 10,
+            background: 'rgba(13, 148, 136, 0.1)',
+            border: '1px solid rgba(13, 148, 136, 0.25)',
+          }}
+        >
+          You’re checking out from an <strong>accepted shop quotation</strong>. Your basket matches the quoted items —
+          complete payment on the next step.
+        </p>
+      ) : null}
       <h2 className="cust__pageTitle">Delivery details</h2>
       <p className="cust__sub">
         Editing here updates your <strong>active</strong> saved address. Add Home, Office, or custom tags from the address

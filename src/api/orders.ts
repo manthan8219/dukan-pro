@@ -34,12 +34,15 @@ export type OrderDto = {
   deliveredAt: string | null;
   createdAt: string;
   items: OrderItemDto[];
+  sourceDemandInvitationId?: string | null;
 };
 
 export type CheckoutOrderPayload = {
   deliveryAddressId: string;
   paymentMethod?: OrderPaymentMethod;
   items: { shopProductId: string; quantity: number }[];
+  /** When checking out from an accepted demand quotation (must match basket lines). */
+  demandInvitationId?: string;
 };
 
 function errWithStatus(message: string, status: number): Error & { status: number } {

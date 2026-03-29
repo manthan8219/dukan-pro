@@ -109,6 +109,8 @@ type CartContextValue = {
   setQty: (shopId: string, productId: string, qty: number) => void;
   removeLine: (shopId: string, productId: string) => void;
   clearCart: () => void;
+  /** Replace the entire basket (e.g. load from an accepted quotation). */
+  replaceCart: (lines: CartLine[]) => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -160,6 +162,10 @@ export function CustomerCartProvider({ children }: { children: ReactNode }) {
 
   const clearCart = useCallback(() => setCart([]), []);
 
+  const replaceCart = useCallback((next: CartLine[]) => {
+    setCart(next.filter((l) => l.qty >= 1 && l.shopId && l.productId && l.title));
+  }, []);
+
   const value = useMemo<CartContextValue>(() => {
     const itemCount = lines.reduce((s, l) => s + l.qty, 0);
     const subtotal = lines.reduce((s, l) => s + l.unitPrice * l.qty, 0);
@@ -171,8 +177,9 @@ export function CustomerCartProvider({ children }: { children: ReactNode }) {
       setQty,
       removeLine,
       clearCart,
+      replaceCart,
     };
-  }, [lines, addItem, setQty, removeLine, clearCart]);
+  }, [lines, addItem, setQty, removeLine, clearCart, replaceCart]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -17,6 +17,13 @@ export type ShopDemandInvitation = {
   quotationText: string | null;
   quotationDocumentUrl: string | null;
   respondedAt: string | null;
+  quotedLineItems?: {
+    shopProductId: string;
+    quantity: number;
+    productNameSnapshot: string;
+    unitPriceMinor: number;
+    unit: string;
+  }[];
 };
 
 export async function listShopDemandInvitations(shopId: string): Promise<ShopDemandInvitation[]> {
@@ -52,6 +59,7 @@ export async function submitDemandQuotation(
   payload: {
     quotationText: string;
     quotationDocumentContentId?: string | null;
+    lineItems?: { shopProductId: string; quantity: number }[];
   },
 ): Promise<ShopDemandInvitation> {
   const res = await fetch(

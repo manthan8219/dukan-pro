@@ -24,6 +24,14 @@ export type CustomerDemandRecord = {
   awardedShopDisplayName?: string | null;
 };
 
+export type QuotedLineItem = {
+  shopProductId: string;
+  quantity: number;
+  productNameSnapshot: string;
+  unitPriceMinor: number;
+  unit: string;
+};
+
 export type CustomerDemandQuotation = {
   invitationId: string;
   shopId: string;
@@ -31,6 +39,7 @@ export type CustomerDemandQuotation = {
   quotationText: string;
   quotationDocumentUrl: string | null;
   respondedAt: string;
+  quotedLineItems?: QuotedLineItem[];
 };
 
 export type CreateCustomerDemandPayload = {
