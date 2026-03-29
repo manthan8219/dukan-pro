@@ -1,0 +1,144 @@
+.barcodeScan {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #0c1210;
+  color: #e8f5f0;
+}
+
+.barcodeScan__header {
+  padding: 1rem 1rem 0.5rem;
+  text-align: center;
+}
+
+.barcodeScan__title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.barcodeScan__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.barcodeScan__stage {
+  position: relative;
+  flex: 1;
+  min-height: 42dvh;
+  margin: 0.5rem 0.75rem 0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #050807;
+  border: 1px solid rgba(232, 245, 240, 0.12);
+}
+
+.barcodeScan__viewport {
+  width: 100%;
+  height: 100%;
+  min-height: 42dvh;
+}
+
+.barcodeScan__viewport video {
+  object-fit: cover !important;
+}
+
+.barcodeScan__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background: rgba(5, 8, 7, 0.72);
+  padding: 1rem;
+}
+
+.barcodeScan__start,
+.barcodeScan__stop {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 1.6rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.barcodeScan__start {
+  background: linear-gradient(165deg, #14b8a6 0%, #0d9488 100%);
+  color: #042f2e;
+  box-shadow: 0 8px 28px rgba(20, 184, 166, 0.35);
+}
+
+.barcodeScan__stop {
+  background: rgba(232, 245, 240, 0.12);
+  color: #e8f5f0;
+  border: 1px solid rgba(232, 245, 240, 0.2);
+}
+
+.barcodeScan__error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #fca5a5;
+  text-align: center;
+  max-width: 280px;
+}
+
+.barcodeScan__toolbar {
+  padding: 0.65rem 1rem;
+  display: flex;
+  justify-content: center;
+}
+
+.barcodeScan__log {
+  flex: 0 0 auto;
+  max-height: 36dvh;
+  overflow: auto;
+  padding: 0.5rem 0.75rem 1rem;
+  border-top: 1px solid rgba(232, 245, 240, 0.1);
+  -webkit-overflow-scrolling: touch;
+}
+
+.barcodeScan__logEmpty {
+  margin: 0;
+  padding: 0.75rem 0.25rem;
+  font-size: 0.82rem;
+  opacity: 0.55;
+  text-align: center;
+}
+
+.barcodeScan__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.barcodeScan__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  margin-bottom: 0.35rem;
+  background: rgba(232, 245, 240, 0.06);
+  font-size: 0.88rem;
+}
+
+.barcodeScan__code {
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+  font-weight: 600;
+}
+
+.barcodeScan__fmt {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  opacity: 0.55;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
