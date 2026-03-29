@@ -28,6 +28,12 @@ function newTierDraft(): RadiusTierDraft {
   return { id: crypto.randomUUID(), minRupee: '', maxKm: '' };
 }
 
+/** Indian GSTIN: 15 chars, standard format (state PAN entity Z check). */
+function isValidGstin(raw: string): boolean {
+  const s = raw.trim().toUpperCase();
+  return /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(s);
+}
+
 const WIZ_STEPS = [
   {
     emoji: '✨',
@@ -51,7 +57,15 @@ const WIZ_STEPS = [
     headline: 'Where should we drop the pin?',
     sub: 'Use GPS or drag the map — however you roll, buyers will find you.',
     cheer: 'Perfect — neighbours can spot you now.',
-    nextCta: 'Pin locked — let’s go',
+    nextCta: 'Pin locked — next',
+  },
+  {
+    emoji: '🧾',
+    short: 'GST',
+    headline: 'Registered under GST?',
+    sub: 'If yes, enter your 15-character GSTIN. If not, choose “No” and we skip it — you can add it later in shop settings.',
+    cheer: 'Tax details noted.',
+    nextCta: 'Onward — what’s on the menu',
   },
   {
     emoji: '🛒',
@@ -115,6 +129,7 @@ const heroFade = {
 export function SellerOnboardingPage() {
   const navigate = useNavigate();
   const shopNameId = useId();
+  const gstinId = useId();
 
   useEffect(() => {
     const sid = getLastShopId();
@@ -144,6 +159,8 @@ export function SellerOnboardingPage() {
   const [dealIn, setDealIn] = useState<Set<string>>(() => new Set(['Groceries']));
   const [serviceRadiusKm, setServiceRadiusKm] = useState(8);
   const [radiusTiers, setRadiusTiers] = useState<RadiusTierDraft[]>([]);
+  const [gstChoice, setGstChoice] = useState<'unset' | 'no' | 'yes'>('unset');
+  const [gstNo, setGstNo] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -281,8 +298,13 @@ export function SellerOnboardingPage() {
         Number.isFinite(longitude)
       );
     }
-    if (step === 3) return dealIn.size >= 1;
-    if (step === 4) {
+    if (step === 3) {
+      if (gstChoice === 'unset') return false;
+      if (gstChoice === 'no') return true;
+      return isValidGstin(gstNo);
+    }
+    if (step === 4) return dealIn.size >= 1;
+    if (step === 5) {
       if (radiusTiers.length === 0) return true;
       return radiusTiers.every((t) => {
         const minS = t.minRupee.trim();
@@ -355,7 +377,13 @@ export function SellerOnboardingPage() {
           dealIn: dealInList,
           serviceRadiusKm,
         },
-        gst: { isGstApplicable: false },
+        gst:
+          gstChoice === 'yes'
+            ? {
+                isGstApplicable: true,
+                gstNo: gstNo.trim().toUpperCase(),
+              }
+            : { isGstApplicable: false, gstNo: null },
         notes: null,
       });
       setLastShopId(shop.id);
@@ -623,7 +651,84 @@ export function SellerOnboardingPage() {
 
           {step === 3 ? (
             <motion.div
-              key="s3"
+              key="s3gst"
+              className="wiz__card"
+              variants={cardSlide}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <div className="wiz__cardInner">
+                <p className="wiz__fieldLabel">Is your shop registered under GST?</p>
+                <div className="wiz__segmented">
+                  <motion.button
+                    type="button"
+                    className={`wiz__seg ${gstChoice === 'no' ? 'wiz__seg--on' : ''}`}
+                    onClick={() => {
+                      setGstChoice('no');
+                      setGstNo('');
+                    }}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    No, skip
+                  </motion.button>
+                  <motion.button
+                    type="button"
+                    className={`wiz__seg ${gstChoice === 'yes' ? 'wiz__seg--on' : ''}`}
+                    onClick={() => setGstChoice('yes')}
+                    whileTap={{ scale: 0.97 }}
+                  >
+                    Yes, I have a GSTIN
+                  </motion.button>
+                </div>
+                {gstChoice === 'yes' ? (
+                  <>
+                    <label className="wiz__fieldLabel" htmlFor={gstinId} style={{ marginTop: '1rem' }}>
+                      GSTIN (15 characters)
+                    </label>
+                    <input
+                      id={gstinId}
+                      className="wiz__input"
+                      type="text"
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      maxLength={15}
+                      value={gstNo}
+                      onChange={(e) =>
+                        setGstNo(
+                          e.target.value
+                            .toUpperCase()
+                            .replace(/[^0-9A-Z]/g, '')
+                            .slice(0, 15),
+                        )
+                      }
+                      placeholder="e.g. 27AABCU9603R1ZX"
+                    />
+                    <p className="wiz__rangeHint">
+                      2-digit state code + 10-character PAN + entity code + Z + check digit. Must match a valid GSTIN to
+                      continue.
+                    </p>
+                  </>
+                ) : null}
+                {gstChoice === 'no' ? (
+                  <p className="wiz__hint" style={{ marginTop: '0.85rem' }}>
+                    No problem — you can add GST later in Shop settings. This is stored on the server when you launch.
+                  </p>
+                ) : null}
+                {gstChoice === 'unset' ? (
+                  <p className="wiz__hint" style={{ marginTop: '0.85rem' }}>
+                    Pick an option above to continue.
+                  </p>
+                ) : null}
+              </div>
+            </motion.div>
+          ) : null}
+
+          {step === 4 ? (
+            <motion.div
+              key="s4stock"
               className="wiz__card"
               variants={cardSlide}
               initial="initial"
@@ -687,9 +792,9 @@ export function SellerOnboardingPage() {
             </motion.div>
           ) : null}
 
-          {step === 4 ? (
+          {step === 5 ? (
             <motion.div
-              key="s4"
+              key="s5tiers"
               className="wiz__card"
               variants={cardSlide}
               initial="initial"
@@ -704,9 +809,10 @@ export function SellerOnboardingPage() {
                   <div>
                     <p className="wiz__calloutTitle">How it works</p>
                     <p className="wiz__calloutText">
-                      Your base radius is <strong>{serviceRadiusKm} km</strong>. Add tiers only if you want to stretch
-                      farther when the order total crosses an amount you pick (e.g. ₹2,000 → 15 km). Skip this entirely if
-                      you keep one distance for everyone.
+                      Your base radius is <strong>{serviceRadiusKm} km</strong> (saved on your shop in the database). Add
+                      tiers only if you want to stretch farther when the order total crosses an amount you pick (e.g. ₹2,000
+                      → 15 km). Each tier is stored as its own row linked to your shop after launch. Skip this if one
+                      distance is enough.
                     </p>
                   </div>
                 </div>
@@ -775,16 +881,16 @@ export function SellerOnboardingPage() {
                 )}
 
                 <p className="wiz__tierFootnote">
-                  Each “km” must be <strong>greater than {serviceRadiusKm} km</strong> (your default). We stash these as
-                  delivery tiers on your shop right after you launch.
+                  Each “km” must be <strong>greater than {serviceRadiusKm} km</strong> (your default). When you launch, each
+                  rule is saved on the server and linked to your shop for checkout and nearby-shop matching.
                 </p>
               </div>
             </motion.div>
           ) : null}
 
-          {step === 5 ? (
+          {step === 6 ? (
             <motion.div
-              key="s5"
+              key="s6launch"
               className="wiz__card"
               variants={cardSlide}
               initial="initial"
@@ -798,14 +904,24 @@ export function SellerOnboardingPage() {
                   </span>
                   <h3 className="wiz__launchTitle">You’re one tap from live</h3>
                   <p className="wiz__launchSub">
-                    We bundle everything you entered and create your shop on the server. If something’s off, you can always
-                    come back and run through the quest again.
+                    We create your shop on the server with GST (if provided), default delivery radius on the shop record,
+                    and any extra radius rules saved as separate rows. If something’s off, you can fix it in Shop settings.
                   </p>
                 </div>
                 <div className="wiz__summary">
                   <div className="wiz__summaryRow">
                     <span>Shop</span>
                     <strong>{shopName.trim() || '—'}</strong>
+                  </div>
+                  <div className="wiz__summaryRow wiz__summaryRow--block">
+                    <span>GST</span>
+                    <strong>
+                      {gstChoice === 'yes'
+                        ? gstNo.trim().toUpperCase() || '—'
+                        : gstChoice === 'no'
+                          ? 'Not registered'
+                          : '—'}
+                    </strong>
                   </div>
                   <div className="wiz__summaryRow wiz__summaryRow--block">
                     <span>Pin</span>
