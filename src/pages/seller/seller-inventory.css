@@ -13,6 +13,123 @@
   font-size: 0.95rem;
 }
 
+.inv__scannerPanel {
+  background: var(--sd-surface, #fff);
+  border-radius: 16px;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--sd-border, rgba(15, 61, 58, 0.1));
+  box-shadow: 0 4px 20px rgba(15, 61, 58, 0.06);
+}
+
+.inv__scannerPanelHead {
+  margin-bottom: 0.75rem;
+}
+
+.inv__scannerPanelTitle {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--sd-teal, #0f3d3a);
+}
+
+.inv__scannerPanelHint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--sd-muted, #64748b);
+  line-height: 1.45;
+}
+
+.inv__scannerErr {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.inv__scannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.inv__scannerBtn {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.1rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
+  background: linear-gradient(165deg, #14b8a6 0%, #0d9488 100%);
+  color: #042f2e;
+}
+
+.inv__scannerBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.inv__scannerBtn--ghost {
+  background: transparent;
+  color: #0d9488;
+  border: 1px solid rgba(13, 148, 136, 0.45);
+}
+
+.inv__scannerPill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+}
+
+.inv__scannerPill--on {
+  background: rgba(52, 211, 153, 0.2);
+  color: #047857;
+}
+
+.inv__scannerPill--off {
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--sd-muted, #64748b);
+}
+
+.inv__scannerQrRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.inv__scannerQrBox {
+  padding: 0.5rem;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid var(--sd-border, rgba(15, 61, 58, 0.12));
+}
+
+.inv__scannerQrMeta {
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+  font-size: 0.8rem;
+  color: var(--sd-muted, #64748b);
+  line-height: 1.45;
+}
+
+.inv__scanFeedback {
+  margin: 0 0 0.85rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f3d3a;
+  border: 1px solid rgba(20, 184, 166, 0.25);
+}
+
 .inv__grid2 {
   display: grid;
   gap: 1rem;

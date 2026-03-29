@@ -1,5 +1,7 @@
+import QRCode from 'react-qr-code';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useLaptopScannerRelay } from '../../scannerRelay/useLaptopScannerRelay';
 import {
   createCatalogProduct,
   normalizeProductName,
@@ -181,6 +183,7 @@ export function SellerInventoryPage() {
   const priceId = useId();
   const listboxId = useId();
   const comboRef = useRef<HTMLDivElement | null>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   const [products, setProducts] = useState<CatalogProduct[]>([]);
   const productsRef = useRef(products);
@@ -214,6 +217,30 @@ export function SellerInventoryPage() {
   const [csvError, setCsvError] = useState<string | null>(null);
   const [csvMessage, setCsvMessage] = useState<string | null>(null);
   const [csvImportLoading, setCsvImportLoading] = useState(false);
+
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null);
+
+  const applyBarcodeFromScanner = useCallback((barcode: string) => {
+    setDraftName(barcode);
+    setPickedCatalog(null);
+    setSearchOpen(true);
+    setFormApiError(null);
+    setScanFeedback(
+      `Scanned barcode — product name filled. ${shopId ? 'Pick a catalog match or add as new for your shop.' : 'Link a shop to save listings to the server.'}`,
+    );
+    queueMicrotask(() => {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [shopId]);
+
+  const scannerRelay = useLaptopScannerRelay(applyBarcodeFromScanner);
+
+  useEffect(() => {
+    if (!scanFeedback) return;
+    const t = window.setTimeout(() => setScanFeedback(null), 7000);
+    return () => window.clearTimeout(t);
+  }, [scanFeedback]);
 
   const revokeUrl = useCallback((url: string | null) => {
     if (url) URL.revokeObjectURL(url);
@@ -602,6 +629,57 @@ export function SellerInventoryPage() {
         </div>
       )}
 
+      <section className="inv__scannerPanel" aria-label="Phone barcode scanner">
+        <div className="inv__scannerPanelHead">
+          <h3 className="inv__scannerPanelTitle">Add with phone camera</h3>
+          <p className="inv__scannerPanelHint">
+            Pair your phone here; each scan fills <strong>Product name</strong> below and searches the catalog so you can
+            list the item for {shopId ? 'your shop' : 'this session'} like any other product.
+          </p>
+        </div>
+        {scannerRelay.httpError ? (
+          <p className="inv__scannerErr">{scannerRelay.httpError}</p>
+        ) : null}
+        {scannerRelay.socketError ? (
+          <p className="inv__scannerErr">{scannerRelay.socketError}</p>
+        ) : null}
+        <div className="inv__scannerActions">
+          {!scannerRelay.active ? (
+            <button
+              type="button"
+              className="inv__scannerBtn"
+              disabled={scannerRelay.starting}
+              onClick={() => void scannerRelay.start()}
+            >
+              {scannerRelay.starting ? 'Starting…' : 'Show QR for phone'}
+            </button>
+          ) : (
+            <>
+              <button type="button" className="inv__scannerBtn inv__scannerBtn--ghost" onClick={scannerRelay.stop}>
+                Stop pairing
+              </button>
+              <span
+                className={`inv__scannerPill inv__scannerPill--${
+                  scannerRelay.phoneConnected ? 'on' : 'off'
+                }`}
+              >
+                {scannerRelay.phoneConnected ? 'Phone connected' : 'Waiting for phone…'}
+              </span>
+            </>
+          )}
+        </div>
+        {scannerRelay.active && scannerRelay.scanUrl ? (
+          <div className="inv__scannerQrRow">
+            <div className="inv__scannerQrBox">
+              <QRCode value={scannerRelay.scanUrl} size={168} level="M" />
+            </div>
+            <p className="inv__scannerQrMeta">
+              Scan with your phone — opens the camera page. Barcodes appear in the form under &ldquo;Add a product&rdquo;.
+            </p>
+          </div>
+        ) : null}
+      </section>
+
       <div className="inv__grid2">
         <div className="inv__card">
           <h3 className="inv__cardTitle">Add a product</h3>
@@ -609,12 +687,14 @@ export function SellerInventoryPage() {
             Product name, stock, and (with a linked shop) your price in rupees. Optional photo. Pick a suggestion to reuse
             a catalog id.
           </p>
+          {scanFeedback ? <p className="inv__scanFeedback">{scanFeedback}</p> : null}
 
           <label className="inv__label" htmlFor={nameId}>
             Product name
           </label>
           <div className="inv__combo" ref={comboRef}>
             <input
+              ref={nameInputRef}
               id={nameId}
               className="inv__input inv__input--combo"
               role="combobox"
