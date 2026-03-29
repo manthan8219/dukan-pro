@@ -33,7 +33,8 @@ function HeaderCart() {
 function CustomerShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { backendProfile } = useAuth();
+  const { backendProfile, signOut } = useAuth();
+  const [signingOut, setSigningOut] = useState(false);
   const demandsRouteActive = location.pathname.includes('/app/customer/demands');
   const requestAttention = useCustomerDemandAttentionCount(
     backendProfile?.id ?? null,
@@ -65,6 +66,23 @@ function CustomerShell({ children }: { children: ReactNode }) {
                   variant="customer"
                 />
               ) : null}
+              <button
+                type="button"
+                className="cust__iconBtn cust__iconBtn--signOut"
+                aria-label="Sign out"
+                disabled={signingOut}
+                onClick={async () => {
+                  setSigningOut(true);
+                  try {
+                    await signOut();
+                    navigate('/', { replace: true });
+                  } finally {
+                    setSigningOut(false);
+                  }
+                }}
+              >
+                <span aria-hidden>🚪</span>
+              </button>
               <HeaderCart />
             </div>
           </div>

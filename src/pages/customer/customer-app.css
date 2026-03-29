@@ -96,6 +96,17 @@
   transform: scale(1.04);
 }
 
+.cust__iconBtn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cust__iconBtn--signOut {
+  background: rgba(15, 118, 110, 0.1);
+  color: var(--cust-teal-dark);
+}
+
 .cust__cartBadge {
   position: absolute;
   top: -0.2rem;
