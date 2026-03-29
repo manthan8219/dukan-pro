@@ -88,6 +88,10 @@ export function SellerLayout() {
       navigate('/welcome/role', { replace: true });
       return;
     }
+    if (backendProfile.role === 'PENDING') {
+      navigate('/welcome/role', { replace: true });
+      return;
+    }
     if (backendProfile.role !== 'SELLER') {
       navigate('/app/customer', { replace: true });
     }
@@ -186,9 +190,6 @@ export function SellerLayout() {
               Shop setup wizard
             </NavLink>
           ) : null}
-          <NavLink className="sdash__footerLink" to="/welcome/role" onClick={() => setNavOpen(false)}>
-            Switch role
-          </NavLink>
           <button
             type="button"
             className="sdash__footerLink"

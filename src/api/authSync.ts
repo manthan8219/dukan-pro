@@ -4,7 +4,7 @@ import { readErrorMessage } from './readErrorMessage';
 
 export type BackendSession = {
   id: string;
-  role: 'CUSTOMER' | 'SELLER';
+  role: 'PENDING' | 'CUSTOMER' | 'SELLER';
   sellerOnboardingComplete: boolean;
 };
 

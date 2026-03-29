@@ -53,6 +53,10 @@ export function LoginPage() {
       return;
     }
     if (!backendProfile) return;
+    if (backendProfile.role === 'PENDING') {
+      navigate('/welcome/role', { replace: true });
+      return;
+    }
     const from = state?.from;
     if (typeof from === 'string' && from.startsWith('/')) {
       navigate(from, { replace: true });

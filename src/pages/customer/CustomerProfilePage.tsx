@@ -109,13 +109,6 @@ export function CustomerProfilePage() {
         <button
           type="button"
           className="cust__btn cust__btn--ghost cust__btn--block"
-          onClick={() => navigate('/welcome/role')}
-        >
-          Switch role (seller / customer)
-        </button>
-        <button
-          type="button"
-          className="cust__btn cust__btn--ghost cust__btn--block"
           onClick={async () => {
             await signOut();
             navigate('/', { replace: true });

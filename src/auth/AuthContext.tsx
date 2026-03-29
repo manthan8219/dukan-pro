@@ -16,6 +16,7 @@ import { getFirebaseAuth, isFirebaseAuthConfigured } from '../firebase/config';
 import { firebaseSignInWithGoogle } from '../firebase/googleSignIn';
 import {
   clearBackendUserId,
+  clearPersistedRole,
   clearSession,
   setBackendUserId,
   setLastShopId,
@@ -69,7 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setBackendUserId(profile.id);
       setBackendProfile(profile);
-      setRole(profile.role === 'SELLER' ? 'seller' : 'customer');
+      if (profile.role === 'PENDING') {
+        clearPersistedRole();
+      } else if (profile.role === 'SELLER') {
+        setRole('seller');
+      } else {
+        setRole('customer');
+      }
       if (profile.role === 'SELLER' && profile.sellerOnboardingComplete) {
         try {
           const shops = await listShopsForUser(profile.id);
@@ -119,7 +126,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             setBackendUserId(profile.id);
             setBackendProfile(profile);
-            setRole(profile.role === 'SELLER' ? 'seller' : 'customer');
+            if (profile.role === 'PENDING') {
+              clearPersistedRole();
+            } else if (profile.role === 'SELLER') {
+              setRole('seller');
+            } else {
+              setRole('customer');
+            }
             if (profile.role === 'SELLER' && profile.sellerOnboardingComplete) {
               try {
                 const shops = await listShopsForUser(profile.id);

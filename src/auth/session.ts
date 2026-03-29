@@ -46,6 +46,11 @@ export function setRole(role: PersistedRole): void {
   localStorage.setItem(ROLE_KEY, role);
 }
 
+/** Clear stored role hint (e.g. while server profile is PENDING). */
+export function clearPersistedRole(): void {
+  localStorage.removeItem(ROLE_KEY);
+}
+
 export function getLastShopId(): string | null {
   const v = localStorage.getItem(SHOP_KEY);
   return v && v.length > 0 ? v : null;

@@ -1,8 +1,9 @@
 import { type Variants, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { patchUser } from '../api/users';
 import { useAuth } from '../auth/AuthContext';
+import { defaultPostLoginPath } from '../auth/postLoginRoute';
 import { useAuthFlash } from '../auth/AuthFlashContext';
 import { getBackendUserId, setRole } from '../auth/session';
 import './RoleSelectPage.css';
@@ -68,9 +69,16 @@ export function RoleSelectPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const isNew = params.get('new') === '1';
-  const { refreshBackendSession } = useAuth();
+  const { backendProfile, sessionSyncing, refreshBackendSession } = useAuth();
   const { showFlash } = useAuthFlash();
   const [choosing, setChoosing] = useState(false);
+
+  useEffect(() => {
+    if (sessionSyncing || !backendProfile) return;
+    if (backendProfile.role !== 'PENDING') {
+      navigate(defaultPostLoginPath(backendProfile), { replace: true });
+    }
+  }, [sessionSyncing, backendProfile, navigate]);
 
   async function chooseCustomer() {
     if (choosing) return;
@@ -169,8 +177,8 @@ export function RoleSelectPage() {
           </h1>
           <p className="rolePick__subtitle">
             {isNew
-              ? 'Two beautiful paths — shop the neighbourhood or grow your dukaan online. Tap the card that feels like you.'
-              : 'Pick how you want to use DukaanPro right now. You can always evolve the product later.'}
+              ? 'Two paths — shop the neighbourhood or grow your dukaan online. Tap the card that fits you; this choice stays with your account.'
+              : 'Pick how you want to use DukaanPro. For security and data integrity, you cannot switch between customer and seller later.'}
           </p>
         </motion.header>
 
