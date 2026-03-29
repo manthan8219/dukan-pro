@@ -11,7 +11,9 @@ import {
 /**
  * Laptop-side pairing: creates a session, shows QR for /scan, forwards barcodes to the callback.
  */
-export function useLaptopScannerRelay(onBarcode: (barcode: string) => void) {
+export function useLaptopScannerRelay(
+  onBarcode: (barcode: string) => void | Promise<void>,
+) {
   const onBarcodeRef = useRef(onBarcode);
   onBarcodeRef.current = onBarcode;
 
@@ -74,7 +76,9 @@ export function useLaptopScannerRelay(onBarcode: (barcode: string) => void) {
 
     const onScan = (p: { barcode?: string }) => {
       const barcode = typeof p?.barcode === 'string' ? p.barcode.trim() : '';
-      if (barcode) onBarcodeRef.current(barcode);
+      if (barcode) {
+        void Promise.resolve(onBarcodeRef.current(barcode)).catch(() => {});
+      }
     };
 
     const onSessionError = (p: { message?: string }) => {

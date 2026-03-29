@@ -5,6 +5,7 @@ import { useLaptopScannerRelay } from '../../scannerRelay/useLaptopScannerRelay'
 import {
   createCatalogProduct,
   normalizeProductName,
+  resolveCatalogProductByBarcode,
   searchCatalogProducts,
   type CatalogProductRecord,
 } from '../../api/products';
@@ -219,20 +220,65 @@ export function SellerInventoryPage() {
   const [csvImportLoading, setCsvImportLoading] = useState(false);
 
   const [scanFeedback, setScanFeedback] = useState<string | null>(null);
+  const [barcodeLookupBusy, setBarcodeLookupBusy] = useState(false);
+  const [barcodeLookupError, setBarcodeLookupError] = useState<string | null>(null);
+  const [pendingBarcodeForCreate, setPendingBarcodeForCreate] = useState<string | null>(
+    null,
+  );
+  const [recentBarcodeScans, setRecentBarcodeScans] = useState<
+    Array<{ barcode: string; source: string; label: string; at: number }>
+  >([]);
 
-  const applyBarcodeFromScanner = useCallback((barcode: string) => {
-    setDraftName(barcode);
-    setPickedCatalog(null);
-    setSearchOpen(true);
+  const applyBarcodeFromScanner = useCallback(async (barcode: string) => {
+    setBarcodeLookupBusy(true);
+    setBarcodeLookupError(null);
     setFormApiError(null);
-    setScanFeedback(
-      `Scanned barcode — product name filled. ${shopId ? 'Pick a catalog match or add as new for your shop.' : 'Link a shop to save listings to the server.'}`,
-    );
+    try {
+      const result = await resolveCatalogProductByBarcode(barcode);
+      const label =
+        result.product?.name ??
+        (result.source === 'unknown' ? 'Not found — add manually' : '—');
+      setRecentBarcodeScans((prev) =>
+        [
+          {
+            barcode: result.barcode,
+            source: result.source,
+            label,
+            at: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 8),
+      );
+
+      if (result.product) {
+        setDraftName(result.product.name);
+        setPickedCatalog(result.product);
+        setSearchOpen(false);
+        setPendingBarcodeForCreate(null);
+        const src =
+          result.source === 'local'
+            ? 'In your catalog'
+            : 'From Open Food Facts (saved to catalog)';
+        setScanFeedback(`${src}: ${result.product.name}`);
+      } else {
+        setDraftName('');
+        setPickedCatalog(null);
+        setSearchOpen(true);
+        setPendingBarcodeForCreate(result.barcode);
+        setScanFeedback(
+          `Barcode ${result.barcode} — not in your catalog or Open Food Facts. Enter a product name; the barcode will be saved on the new catalog product when you add.`,
+        );
+      }
+    } catch (e) {
+      setBarcodeLookupError(e instanceof Error ? e.message : 'Barcode lookup failed');
+    } finally {
+      setBarcodeLookupBusy(false);
+    }
     queueMicrotask(() => {
       nameInputRef.current?.focus();
       nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
-  }, [shopId]);
+  }, []);
 
   const scannerRelay = useLaptopScannerRelay(applyBarcodeFromScanner);
 
@@ -344,6 +390,7 @@ export function SellerInventoryPage() {
     setDraftName(p.name);
     setPickedCatalog(p);
     setSearchOpen(false);
+    setPendingBarcodeForCreate(null);
   }
 
   async function addProduct() {
@@ -363,7 +410,10 @@ export function SellerInventoryPage() {
         let productId = pickedCatalog?.id;
         if (!productId) {
           try {
-            const created = await createCatalogProduct({ name });
+            const created = await createCatalogProduct({
+              name,
+              barcode: pendingBarcodeForCreate ?? undefined,
+            });
             productId = created.id;
           } catch (e) {
             if (getErrorStatus(e) === 409) {
@@ -442,6 +492,7 @@ export function SellerInventoryPage() {
     setDraftQty('1');
     setDraftPriceRupees('');
     setPickedCatalog(null);
+    setPendingBarcodeForCreate(null);
     setPhotoInputKey((k) => k + 1);
     setSearchResults([]);
   }
@@ -633,10 +684,16 @@ export function SellerInventoryPage() {
         <div className="inv__scannerPanelHead">
           <h3 className="inv__scannerPanelTitle">Add with phone camera</h3>
           <p className="inv__scannerPanelHint">
-            Pair your phone here; each scan fills <strong>Product name</strong> below and searches the catalog so you can
-            list the item for {shopId ? 'your shop' : 'this session'} like any other product.
+            Pair your phone here. Each scan checks <strong>your catalog</strong>, then <strong>Open Food Facts</strong>; if
+            still unknown, you enter a name and add — the barcode is stored on the new product.
           </p>
         </div>
+        {barcodeLookupBusy ? (
+          <p className="inv__scannerLookup" role="status">
+            Looking up barcode…
+          </p>
+        ) : null}
+        {barcodeLookupError ? <p className="inv__scannerErr">{barcodeLookupError}</p> : null}
         {scannerRelay.httpError ? (
           <p className="inv__scannerErr">{scannerRelay.httpError}</p>
         ) : null}
@@ -674,8 +731,22 @@ export function SellerInventoryPage() {
               <SafeQRCode value={scannerRelay.scanUrl} size={168} level="M" />
             </div>
             <p className="inv__scannerQrMeta">
-              Scan with your phone — opens the camera page. Barcodes appear in the form under &ldquo;Add a product&rdquo;.
+              Scan with your phone — opens the camera page. Each scan is resolved (catalog → Open Food Facts → manual).
             </p>
+          </div>
+        ) : null}
+        {recentBarcodeScans.length > 0 ? (
+          <div className="inv__scanHistory" aria-label="Recent scans this session">
+            <span className="inv__scanHistoryTitle">Recent scans</span>
+            <ul className="inv__scanHistoryList">
+              {recentBarcodeScans.map((row) => (
+                <li key={`${row.at}-${row.barcode}`} className="inv__scanHistoryItem">
+                  <span className="inv__scanHistoryCode">{row.barcode}</span>
+                  <span className="inv__scanHistorySrc">{row.source}</span>
+                  <span className="inv__scanHistoryLabel">{row.label}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </section>
@@ -688,6 +759,12 @@ export function SellerInventoryPage() {
             a catalog id.
           </p>
           {scanFeedback ? <p className="inv__scanFeedback">{scanFeedback}</p> : null}
+          {pendingBarcodeForCreate ? (
+            <p className="inv__pendingBarcode">
+              Barcode to save on new product:{' '}
+              <code className="inv__code">{pendingBarcodeForCreate}</code>
+            </p>
+          ) : null}
 
           <label className="inv__label" htmlFor={nameId}>
             Product name

@@ -9,6 +9,15 @@ export type CatalogProductRecord = {
   category: string | null;
   defaultImageUrl: string | null;
   searchTerms: string[] | null;
+  barcode?: string | null;
+};
+
+export type BarcodeResolveSource = 'local' | 'openfoodfacts' | 'unknown';
+
+export type BarcodeResolveResponse = {
+  source: BarcodeResolveSource;
+  barcode: string;
+  product: CatalogProductRecord | null;
 };
 
 export function normalizeProductName(name: string): string {
@@ -19,6 +28,20 @@ function errWithStatus(message: string, status: number): Error & { status: numbe
   const e = new Error(message) as Error & { status: number };
   e.status = status;
   return e;
+}
+
+export async function resolveCatalogProductByBarcode(
+  code: string,
+  signal?: AbortSignal,
+): Promise<BarcodeResolveResponse> {
+  const params = new URLSearchParams({ code: code.trim() });
+  const res = await fetch(`${getApiBase()}/products/resolve-barcode?${params}`, {
+    signal,
+  });
+  if (!res.ok) {
+    throw errWithStatus(await readErrorMessage(res), res.status);
+  }
+  return (await res.json()) as BarcodeResolveResponse;
 }
 
 export async function searchCatalogProducts(
@@ -43,6 +66,7 @@ export type CreateCatalogProductPayload = {
   category?: string | null;
   defaultImageUrl?: string | null;
   searchTerms?: string[] | null;
+  barcode?: string | null;
 };
 
 export async function createCatalogProduct(
@@ -57,6 +81,7 @@ export async function createCatalogProduct(
       category: payload.category ?? undefined,
       defaultImageUrl: payload.defaultImageUrl ?? undefined,
       searchTerms: payload.searchTerms ?? undefined,
+      barcode: payload.barcode ?? undefined,
     }),
   });
   if (!res.ok) {

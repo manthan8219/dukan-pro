@@ -130,6 +130,73 @@
   border: 1px solid rgba(20, 184, 166, 0.25);
 }
 
+.inv__scannerLookup {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0d9488;
+}
+
+.inv__pendingBarcode {
+  margin: 0 0 0.85rem;
+  font-size: 0.84rem;
+  color: var(--sd-muted, #64748b);
+}
+
+.inv__scanHistory {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--sd-border, rgba(15, 61, 58, 0.1));
+}
+
+.inv__scanHistoryTitle {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sd-muted, #64748b);
+  margin-bottom: 0.4rem;
+}
+
+.inv__scanHistoryList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.inv__scanHistoryItem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid rgba(15, 61, 58, 0.06);
+  font-size: 0.78rem;
+}
+
+.inv__scanHistoryItem:last-child {
+  border-bottom: none;
+}
+
+.inv__scanHistoryCode {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.inv__scanHistorySrc {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #0d9488;
+}
+
+.inv__scanHistoryLabel {
+  flex: 1 1 100%;
+  color: var(--sd-muted, #64748b);
+  word-break: break-word;
+}
+
 .inv__grid2 {
   display: grid;
   gap: 1rem;
