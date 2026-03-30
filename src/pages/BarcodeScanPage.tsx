@@ -1,10 +1,16 @@
 import {
-  BarcodeFormat,
-  BrowserMultiFormatReader,
-  DecodeHintType,
-} from '@zxing/library';
+  Html5Qrcode,
+  Html5QrcodeSupportedFormats,
+} from 'html5-qrcode';
 import type { Socket } from 'socket.io-client';
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   WS_JOIN_SESSION,
@@ -17,19 +23,27 @@ import { createScannerSocket } from '../scannerRelay/createScannerSocket';
 import './BarcodeScanPage.css';
 
 const DEDUPE_MS = 1200;
-/** Throttle native BarcodeDetector (fast path) — every frame is expensive */
-const NATIVE_DETECT_INTERVAL_MS = 80;
-/** ZXing attempts; lower = snappier but more CPU */
-const ZXING_DECODE_INTERVAL_MS = 90;
 
-/** 720p-ish: often focuses more reliably than max resolution up close */
-const VIDEO_CONSTRAINTS: MediaStreamConstraints = {
-  audio: false,
-  video: {
-    facingMode: { ideal: 'environment' },
-    width: { ideal: 1280 },
-    height: { ideal: 720 },
-  },
+const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.CODE_93,
+  Html5QrcodeSupportedFormats.CODABAR,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.PDF_417,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+];
+
+/** High resolution + back camera — html5-qrcode samples the qrbox region every frame */
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
 };
 
 let scanAudioContext: AudioContext | null = null;
@@ -47,7 +61,6 @@ function getScanAudioContext(): AudioContext | null {
   return scanAudioContext;
 }
 
-/** Call once from a user gesture (tap) so the beep is not blocked by the browser. */
 async function unlockScanAudio(): Promise<boolean> {
   const ctx = getScanAudioContext();
   if (!ctx) return false;
@@ -95,50 +108,12 @@ function playScanFeedback(): void {
   }
 }
 
-type BarcodeDetectorInstance = {
-  detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
-};
-
-type BarcodeDetectorCtor = new (options?: {
-  formats?: string[];
-}) => BarcodeDetectorInstance;
-
-function tryCreateNativeDetector(): BarcodeDetectorInstance | null {
-  const Ctor = (globalThis as unknown as { BarcodeDetector?: BarcodeDetectorCtor })
-    .BarcodeDetector;
-  if (typeof Ctor !== 'function') return null;
-
-  const formatSets = [
-    [
-      'ean_13',
-      'ean_8',
-      'upc_a',
-      'upc_e',
-      'code_128',
-      'code_39',
-      'code_93',
-      'codabar',
-      'itf',
-      'qr_code',
-      'data_matrix',
-      'pdf417',
-    ],
-    ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
-    ['ean_13', 'code_128', 'qr_code'],
-  ];
-
-  for (const formats of formatSets) {
-    try {
-      return new Ctor({ formats });
-    } catch {
-      /* unsupported combo on this browser */
-    }
-  }
-  return null;
-}
-
 export function BarcodeScanPage() {
   const headingId = useId();
+  const html5RootId = useMemo(
+    () => `dp-barcode-scan-${Math.random().toString(36).slice(2, 11)}`,
+    [],
+  );
   const [params] = useSearchParams();
   const sessionId = (params.get('sessionId') ?? '').trim();
   const sessionIdRef = useRef(sessionId);
@@ -152,35 +127,13 @@ export function BarcodeScanPage() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [cameraPreviewOn, setCameraPreviewOn] = useState(false);
-  const [scannerBackend, setScannerBackend] = useState<'native' | 'zxing' | null>(
-    null,
-  );
+  const [scannerLive, setScannerLive] = useState(false);
   const [lastSent, setLastSent] = useState<string | null>(null);
   const [scanBang, setScanBang] = useState(0);
   const [soundUnlocked, setSoundUnlocked] = useState(false);
   const lastRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const socketRef = useRef<Socket | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const zxingHints = useMemo(() => {
-    const m = new Map<DecodeHintType, unknown>();
-    m.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.EAN_13,
-      BarcodeFormat.EAN_8,
-      BarcodeFormat.UPC_A,
-      BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_128,
-      BarcodeFormat.CODE_39,
-      BarcodeFormat.CODE_93,
-      BarcodeFormat.CODABAR,
-      BarcodeFormat.ITF,
-      BarcodeFormat.QR_CODE,
-      BarcodeFormat.DATA_MATRIX,
-      BarcodeFormat.PDF_417,
-    ]);
-    m.set(DecodeHintType.TRY_HARDER, true);
-    return m;
-  }, []);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
 
   const handleDecodedText = useCallback((raw: string) => {
     const text = raw.trim();
@@ -210,110 +163,97 @@ export function BarcodeScanPage() {
   useEffect(() => {
     if (cameraBlocked) {
       setCameraPreviewOn(false);
-      setScannerBackend(null);
+      setScannerLive(false);
       return;
     }
 
-    const video = videoRef.current;
-    if (!video) return;
+    if (typeof document === 'undefined') return;
+    const root = document.getElementById(html5RootId);
+    if (!root) return;
 
-    let cancelled = false;
-    let stream: MediaStream | null = null;
-    let reader: BrowserMultiFormatReader | null = null;
-    let rafNative = 0;
-    let lastNativeAt = 0;
-    let zxingStopping = false;
-
+    let alive = true;
     setCameraError(null);
     setCameraPreviewOn(false);
-    setScannerBackend(null);
+    setScannerLive(false);
 
-    const stopAll = () => {
-      cancelled = true;
-      zxingStopping = true;
-      cancelAnimationFrame(rafNative);
-      try {
-        reader?.reset();
-      } catch {
-        /* ignore */
-      }
-      reader = null;
-      if (stream) {
-        stream.getTracks().forEach((t) => t.stop());
-        stream = null;
-      }
-      if (video.srcObject) {
-        video.srcObject = null;
-      }
-    };
+    const scanner = new Html5Qrcode(html5RootId, {
+      verbose: false,
+      formatsToSupport: BARCODE_FORMATS,
+      useBarCodeDetectorIfSupported: true,
+    });
+    scannerRef.current = scanner;
 
-    (async () => {
+    void (async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia(VIDEO_CONSTRAINTS);
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
+        await scanner.start(
+          VIDEO_CONSTRAINTS,
+          {
+            fps: 30,
+            qrbox: (viewfinderWidth, viewfinderHeight) => {
+              const w = Math.floor(viewfinderWidth * 0.96);
+              const h = Math.floor(
+                Math.min(viewfinderHeight * 0.55, viewfinderWidth * 0.42),
+              );
+              return { width: w, height: Math.max(h, 120) };
+            },
+            disableFlip: false,
+          },
+          (decodedText) => {
+            if (alive) handleDecodedText(decodedText);
+          },
+          () => {
+            /* no code in frame — expected every frame */
+          },
+        );
+
+        if (!alive) {
+          if (scanner.isScanning) await scanner.stop().catch(() => undefined);
+          scanner.clear();
           return;
         }
-        const vtrack = stream.getVideoTracks()[0];
-        if (vtrack?.applyConstraints) {
+
+        const videoEl = root.querySelector('video');
+        const ms = videoEl?.srcObject;
+        const mediaTrack =
+          ms instanceof MediaStream ? ms.getVideoTracks()[0] : undefined;
+
+        if (mediaTrack?.applyConstraints) {
           try {
-            await vtrack.applyConstraints({
+            await mediaTrack.applyConstraints({
               advanced: [{ focusMode: 'continuous' }],
             } as unknown as MediaTrackConstraints);
           } catch {
             /* not supported */
           }
         }
-        video.srcObject = stream;
-        await video.play();
-        if (cancelled) return;
+
         setCameraPreviewOn(true);
-
-        const native = tryCreateNativeDetector();
-        if (native) {
-          setScannerBackend('native');
-          const tickNative = (t: number) => {
-            if (cancelled) return;
-            if (t - lastNativeAt >= NATIVE_DETECT_INTERVAL_MS) {
-              lastNativeAt = t;
-              if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-                void native
-                  .detect(video)
-                  .then((codes) => {
-                    if (cancelled || !codes?.length) return;
-                    for (const c of codes) {
-                      if (c.rawValue) handleDecodedText(c.rawValue);
-                    }
-                  })
-                  .catch(() => {
-                    /* no barcode in frame */
-                  });
-              }
-            }
-            rafNative = requestAnimationFrame(tickNative);
-          };
-          rafNative = requestAnimationFrame(tickNative);
-          return;
-        }
-
-        setScannerBackend('zxing');
-        reader = new BrowserMultiFormatReader(zxingHints);
-        reader.timeBetweenDecodingAttempts = ZXING_DECODE_INTERVAL_MS;
-        await reader.decodeFromStream(stream, video, (result) => {
-          if (cancelled || zxingStopping) return;
-          if (result) handleDecodedText(result.getText());
-        });
+        setScannerLive(true);
       } catch (e) {
-        if (!cancelled) {
+        if (alive) {
           setCameraError(
-            e instanceof Error ? e.message : 'Camera failed',
+            e instanceof Error ? e.message : 'Camera or scanner failed',
           );
         }
       }
     })();
 
-    return stopAll;
-  }, [cameraBlocked, handleDecodedText, zxingHints]);
+    return () => {
+      alive = false;
+      const s = scannerRef.current;
+      scannerRef.current = null;
+      void (async () => {
+        try {
+          if (s?.isScanning) await s.stop();
+          s?.clear();
+        } catch {
+          /* ignore */
+        }
+      })();
+      setCameraPreviewOn(false);
+      setScannerLive(false);
+    };
+  }, [cameraBlocked, handleDecodedText, html5RootId]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -397,11 +337,9 @@ export function BarcodeScanPage() {
   const statusLine = !socketConnected
     ? 'Reconnecting…'
     : relayReady
-      ? scannerBackend === 'native'
-        ? 'Live — two-tone beep + vibration on scan'
-        : scannerBackend === 'zxing'
-          ? 'Live — hold steady; tap screen once if you hear no beep'
-          : 'Live — starting scanner…'
+      ? scannerLive
+        ? 'Live — fast scan (30 fps, native detector when supported)'
+        : 'Starting high-speed scanner…'
       : 'Joining session… you can aim the camera now';
 
   return (
@@ -424,13 +362,7 @@ export function BarcodeScanPage() {
           });
         }}
       >
-        <video
-          ref={videoRef}
-          className="barcodeScan__viewport barcodeScan__viewport--contain"
-          muted
-          playsInline
-          autoPlay
-        />
+        <div id={html5RootId} className="barcodeScan__html5Root" />
         <div className="barcodeScan__reticle" aria-hidden>
           <div
             className={`barcodeScan__reticleBand${
@@ -444,8 +376,8 @@ export function BarcodeScanPage() {
             <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--br" />
           </div>
           <p className="barcodeScan__reticleHint">
-            Move back until the barcode looks sharp, then hold steady. Keep the whole barcode
-            inside the green band — farther away is usually clearer.
+            Hold the barcode flat inside the band. The scanner reads the center area very quickly —
+            move back slightly if the image looks blurry.
           </p>
         </div>
         {cameraPreviewOn && !soundUnlocked ? (

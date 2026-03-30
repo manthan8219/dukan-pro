@@ -49,6 +49,28 @@
   object-fit: contain;
 }
 
+/* html5-qrcode mounts video here — fill stage, letterbox for full FOV */
+.barcodeScan__html5Root {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.barcodeScan__html5Root video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.barcodeScan__html5Root > div {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Large band + corners — barcodes are wide; stay farther for focus */
 .barcodeScan__reticle {
   position: absolute;
