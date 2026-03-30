@@ -1,4 +1,5 @@
 import confetti from 'canvas-confetti';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { NotificationBell } from '../../components/NotificationBell';
@@ -243,17 +244,27 @@ export function SellerLayout() {
         </header>
 
         <main className="sdash__content">
-          {tierWarning ? (
-            <div className="sdash__alert" role="status">
-              {tierWarning}
-            </div>
-          ) : null}
-          {attachWarning ? (
-            <div className="sdash__alert" role="status">
-              {attachWarning}
-            </div>
-          ) : null}
-          <Outlet context={{ shopId }} />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {tierWarning ? (
+                <div className="sdash__alert" role="status">
+                  {tierWarning}
+                </div>
+              ) : null}
+              {attachWarning ? (
+                <div className="sdash__alert" role="status">
+                  {attachWarning}
+                </div>
+              ) : null}
+              <Outlet context={{ shopId }} />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
     </div>

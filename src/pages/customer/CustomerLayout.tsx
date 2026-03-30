@@ -1,3 +1,4 @@
+import { AnimatePresence, motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -106,7 +107,20 @@ function CustomerShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="cust__main">{children}</main>
+      <main className="cust__main">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            style={{ display: 'contents' }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
+      </main>
 
       <nav className="cust__tabbar" aria-label="Customer navigation">
         <div className="cust__tabbarInner">
