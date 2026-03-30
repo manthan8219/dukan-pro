@@ -71,6 +71,13 @@
   height: 100% !important;
 }
 
+/* If an older build still passed qrbox, hide the library’s duplicate frame */
+.barcodeScan__html5Root #qr-shaded-region {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 /* Large band + corners — barcodes are wide; stay farther for focus */
 .barcodeScan__reticle {
   position: absolute;

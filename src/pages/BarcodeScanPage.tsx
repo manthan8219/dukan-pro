@@ -43,9 +43,33 @@ const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
  * html5-qrcode requires start(cameraIdOrConfig) to be EITHER a device id string OR an object
  * with exactly one key: `facingMode` or `deviceId`. Width/height belong in config.videoConstraints.
  */
+/** html5-qrcode allows only one key on this object */
 const CAMERA_FACING: { facingMode: string } = { facingMode: 'environment' };
 
+type CameraSelector = { facingMode: string } | { deviceId: string };
+
+type ScanMediaAttempt = {
+  cameraSelect: CameraSelector;
+  stream: MediaStreamConstraints;
+};
+
 const STREAM_CONSTRAINT_ATTEMPTS: MediaStreamConstraints[] = [
+  {
+    audio: false,
+    video: {
+      facingMode: { exact: 'environment' },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    },
+  },
+  {
+    audio: false,
+    video: {
+      facingMode: { exact: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  },
   {
     audio: false,
     video: {
@@ -67,6 +91,79 @@ const STREAM_CONSTRAINT_ATTEMPTS: MediaStreamConstraints[] = [
     video: { facingMode: 'environment' },
   },
 ];
+
+/** Pick a physical back camera when labels / device order allow it */
+async function resolveRearCameraDeviceId(): Promise<string | null> {
+  try {
+    const list = await Html5Qrcode.getCameras();
+    if (!list.length) return null;
+
+    const rank = (label: string): number => {
+      const l = label.toLowerCase();
+      if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(l)) {
+        return -1;
+      }
+      if (
+        /back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(
+          l,
+        )
+      ) {
+        return 2;
+      }
+      return 0;
+    };
+
+    let bestId: string | null = null;
+    let bestRank = -999;
+    for (const c of list) {
+      const r = rank(c.label || '');
+      if (r < 0) continue;
+      if (r > bestRank) {
+        bestRank = r;
+        bestId = c.id;
+      }
+    }
+    if (bestRank >= 2 && bestId) return bestId;
+
+    if (list.length >= 2) {
+      const nonFront = list.filter((c) => rank(c.label || '') !== -1);
+      const pool = nonFront.length ? nonFront : list;
+      return pool[pool.length - 1]!.id;
+    }
+
+    return list[0]!.id;
+  } catch {
+    return null;
+  }
+}
+
+function buildScanAttempts(rearDeviceId: string | null): ScanMediaAttempt[] {
+  const out: ScanMediaAttempt[] = [];
+  if (rearDeviceId) {
+    out.push({
+      cameraSelect: { deviceId: rearDeviceId },
+      stream: {
+        audio: false,
+        video: {
+          deviceId: { exact: rearDeviceId },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+      },
+    });
+    out.push({
+      cameraSelect: { deviceId: rearDeviceId },
+      stream: {
+        audio: false,
+        video: { deviceId: { exact: rearDeviceId } },
+      },
+    });
+  }
+  for (const stream of STREAM_CONSTRAINT_ATTEMPTS) {
+    out.push({ cameraSelect: CAMERA_FACING, stream });
+  }
+  return out;
+}
 
 function formatScannerError(e: unknown): string {
   const raw =
@@ -212,21 +309,9 @@ export function BarcodeScanPage() {
     setCameraPreviewOn(false);
     setScannerLive(false);
 
+    /** No `qrbox` — avoids html5-qrcode’s second overlay (shaded box + corner brackets) */
     const scanConfigBase = {
       fps: 30,
-      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-        const vw = Math.max(viewfinderWidth, 1);
-        const vh = Math.max(viewfinderHeight, 1);
-        const w = Math.min(Math.floor(vw * 0.96), vw - 2);
-        const h = Math.min(
-          Math.floor(Math.min(vh * 0.55, vw * 0.42)),
-          vh - 2,
-        );
-        return {
-          width: Math.max(50, w),
-          height: Math.max(50, h),
-        };
-      },
       disableFlip: false,
     };
 
@@ -234,7 +319,11 @@ export function BarcodeScanPage() {
       let lastError: unknown;
       let scanner: Html5Qrcode | null = null;
 
+      const rearId = await resolveRearCameraDeviceId();
+      const scanAttempts = buildScanAttempts(rearId);
+
       const tryOnce = async (
+        cameraSelect: CameraSelector,
         streamConstraints: MediaStreamConstraints,
         useNativeDetector: boolean,
       ): Promise<boolean> => {
@@ -256,7 +345,7 @@ export function BarcodeScanPage() {
         scannerRef.current = scanner;
 
         await scanner.start(
-          CAMERA_FACING,
+          cameraSelect,
           {
             ...scanConfigBase,
             // Library merges this into getUserMedia(); typings incorrectly say MediaTrackConstraints.
@@ -275,10 +364,14 @@ export function BarcodeScanPage() {
 
       try {
         let started = false;
-        for (const streamConstraints of STREAM_CONSTRAINT_ATTEMPTS) {
+        for (const att of scanAttempts) {
           for (const useNative of [true, false]) {
             try {
-              started = await tryOnce(streamConstraints, useNative);
+              started = await tryOnce(
+                att.cameraSelect,
+                att.stream,
+                useNative,
+              );
               if (started) break;
             } catch (e) {
               lastError = e;
@@ -423,8 +516,8 @@ export function BarcodeScanPage() {
     ? 'Reconnecting…'
     : relayReady
       ? scannerLive
-        ? 'Live — fast scan (30 fps, native detector when supported)'
-        : 'Starting high-speed scanner…'
+        ? 'Live — rear camera · full frame scan'
+        : 'Starting camera (rear preferred)…'
       : 'Joining session… you can aim the camera now';
 
   return (
