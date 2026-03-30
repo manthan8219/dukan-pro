@@ -44,6 +44,41 @@
   background: #000;
 }
 
+/* Aim guide — barcode height should roughly match the frame (like QR framing) */
+.barcodeScan__reticle {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  box-sizing: border-box;
+}
+
+.barcodeScan__reticleFrame {
+  width: min(92vw, 420px);
+  height: min(28vw, 140px);
+  max-height: 22dvh;
+  border: 2px solid rgba(52, 211, 153, 0.85);
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 9999px rgba(5, 8, 7, 0.35),
+    0 0 24px rgba(52, 211, 153, 0.25);
+}
+
+.barcodeScan__reticleHint {
+  margin: 1rem 0 0;
+  max-width: 280px;
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: rgba(232, 245, 240, 0.92);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+}
+
 .barcodeScan__overlay {
   position: absolute;
   inset: 0;
@@ -218,4 +253,12 @@
   font-weight: 700;
   word-break: break-all;
   text-align: center;
+}
+
+.barcodeScan__footerNote {
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  opacity: 0.65;
+  text-align: center;
+  max-width: 280px;
 }
