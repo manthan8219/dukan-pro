@@ -1,3 +1,7 @@
+/* ============================================================
+   DukaanPro — Global Base Styles & Animation Library
+   ============================================================ */
+
 *,
 *::before,
 *::after {
@@ -6,6 +10,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -15,6 +20,7 @@ body {
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -22,31 +28,189 @@ body {
 }
 
 button,
-input {
+input,
+textarea,
+select {
   font: inherit;
 }
 
-/* Full-screen gates (Firebase session check) */
+/* ============================================================
+   Global Keyframes
+   ============================================================ */
+
+@keyframes dp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dp-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dp-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes dp-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes dp-pulse-badge {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5); }
+  50% { transform: scale(1.1); box-shadow: 0 0 0 4px rgba(244, 63, 94, 0); }
+}
+
+@keyframes dp-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes dp-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-12px) rotate(1deg); }
+  66% { transform: translateY(-6px) rotate(-1deg); }
+}
+
+@keyframes dp-gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes dp-orb-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(20px, -15px) scale(1.05); }
+  50% { transform: translate(-10px, -25px) scale(0.97); }
+  75% { transform: translate(-20px, -5px) scale(1.03); }
+}
+
+@keyframes dp-orb-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(-15px, 20px) scale(0.95); }
+  50% { transform: translate(10px, 15px) scale(1.05); }
+  75% { transform: translate(20px, -10px) scale(0.98); }
+}
+
+@keyframes dp-wave {
+  0% { transform: scaleX(0.98) scaleY(1); }
+  50% { transform: scaleX(1) scaleY(1.02); }
+  100% { transform: scaleX(0.98) scaleY(1); }
+}
+
+@keyframes dp-tick {
+  0%, 100% { transform: scaleX(1); }
+  50% { transform: scaleX(1.018); }
+}
+
+/* ============================================================
+   Reduced Motion Support
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   Auth Wait / Loading Gate
+   ============================================================ */
+
 .authWait {
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
-  background: linear-gradient(165deg, #e8f5f2 0%, #d8ebe6 45%, #cfe5df 100%);
+  background: linear-gradient(165deg, #042f2e 0%, #0f3d3a 45%, #134e4a 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.authWait::before {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.15) 0%, transparent 70%);
+  top: -100px;
+  right: -100px;
+  animation: dp-orb-drift 8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.authWait::after {
+  content: '';
+  position: absolute;
+  width: 300px;
+  height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.1) 0%, transparent 70%);
+  bottom: -80px;
+  left: -60px;
+  animation: dp-orb-drift-2 10s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .authWait__card {
-  background: #fff;
-  padding: 1.5rem 2rem;
-  border-radius: 16px;
-  box-shadow: 0 12px 40px rgba(15, 61, 58, 0.1);
-  border: 1px solid rgba(15, 61, 58, 0.1);
+  position: relative;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(20px);
+  padding: 1.75rem 2.25rem;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  animation: dp-scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.authWait__spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid rgba(94, 234, 212, 0.3);
+  border-top-color: #5eead4;
+  border-radius: 50%;
+  animation: dp-spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 
 .authWait__title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #0f766e;
+  color: #ccfbf1;
+  letter-spacing: -0.01em;
 }

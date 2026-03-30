@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/manthan/Desktop/DukaanPro/frontend/src/components -type f -name *.tsx)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

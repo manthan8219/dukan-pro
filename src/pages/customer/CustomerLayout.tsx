@@ -182,6 +182,7 @@ export function CustomerRouteShell({ children }: { children: ReactNode }) {
     return (
       <div className="authWait">
         <div className="authWait__card" role="status" aria-live="polite">
+          <div className="authWait__spinner" aria-hidden="true" />
           <p className="authWait__title">{user && sessionSyncing ? 'Syncing your account…' : 'Checking your session…'}</p>
         </div>
       </div>

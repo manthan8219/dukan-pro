@@ -1,54 +1,69 @@
+/* ============================================================
+   DukaanPro — Notification Bell
+   ============================================================ */
+
 .nb {
   position: relative;
 }
 
 .nb__popover {
   position: absolute;
-  top: calc(100% + 0.35rem);
+  top: calc(100% + 0.5rem);
   right: 0;
   width: min(22rem, calc(100vw - 2rem));
-  max-height: min(24rem, 70dvh);
+  max-height: min(26rem, 72dvh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid rgba(15, 118, 110, 0.18);
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  box-shadow:
+    0 20px 60px rgba(15, 23, 42, 0.16),
+    0 4px 16px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
   z-index: 100;
+  backdrop-filter: blur(20px);
+  animation: dp-scale-in 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: top right;
 }
 
 .nb__popoverTitle {
   margin: 0;
-  padding: 0.65rem 0.85rem;
-  font-size: 0.72rem;
+  padding: 0.75rem 1rem;
+  font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   color: #64748b;
-  border-bottom: 1px solid rgba(15, 118, 110, 0.1);
+  border-bottom: 1px solid rgba(15, 118, 110, 0.08);
+  background: rgba(15, 118, 110, 0.02);
 }
 
 .nb__list {
   margin: 0;
-  padding: 0.35rem 0;
+  padding: 0.25rem 0;
   list-style: none;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 118, 110, 0.2) transparent;
 }
 
 .nb__item {
   width: 100%;
   text-align: left;
-  padding: 0.65rem 0.85rem;
+  padding: 0.75rem 1rem;
   border: none;
   background: none;
   cursor: pointer;
   font: inherit;
   color: #0f172a;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-  transition: background 0.12s ease;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+  transition:
+    background 0.15s ease,
+    transform 0.12s ease;
 }
 
 .nb__item:last-child {
@@ -57,54 +72,62 @@
 
 .nb__item:hover,
 .nb__item:focus-visible {
-  background: rgba(15, 118, 110, 0.06);
+  background: rgba(15, 118, 110, 0.05);
   outline: none;
 }
 
 .nb__itemKind {
-  display: block;
-  font-size: 0.62rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #0f766e;
-  margin-bottom: 0.2rem;
+  letter-spacing: 0.07em;
+  color: #0d9488;
+  margin-bottom: 0.25rem;
+  background: rgba(15, 118, 110, 0.08);
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
 }
 
 .nb__itemTitle {
   display: block;
   font-weight: 700;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   line-height: 1.35;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.18rem;
+  letter-spacing: -0.01em;
 }
 
 .nb__itemBody {
-  display: block;
-  font-size: 0.78rem;
-  color: #64748b;
-  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.45;
+  font-weight: 500;
 }
 
 .nb__itemTime {
   display: block;
   font-size: 0.65rem;
   color: #94a3b8;
-  margin-top: 0.35rem;
+  margin-top: 0.4rem;
+  font-weight: 600;
 }
 
 .nb__empty,
 .nb__hint,
 .nb__err {
   margin: 0;
-  padding: 1rem 0.85rem;
+  padding: 1.25rem 1rem;
   font-size: 0.85rem;
   color: #64748b;
   text-align: center;
+  font-weight: 500;
 }
 
 .nb__err {
