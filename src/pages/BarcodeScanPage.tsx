@@ -202,6 +202,12 @@ function buildScanAttempts(
   const out: ScanMediaAttempt[] = [];
   const seen = new Set<string>();
 
+  // Try facingMode:environment FIRST — the most reliable way to get the back camera.
+  // Device-ID enumeration is used only as a fallback because labels/order vary by device.
+  for (const stream of STREAM_CONSTRAINT_ATTEMPTS) {
+    out.push({ cameraSelect: CAMERA_FACING, stream });
+  }
+
   const pushDevice = (deviceId: string) => {
     if (!deviceId || seen.has(deviceId)) return;
     seen.add(deviceId);
@@ -230,9 +236,6 @@ function buildScanAttempts(
   rest.reverse();
   for (const id of rest) pushDevice(id);
 
-  for (const stream of STREAM_CONSTRAINT_ATTEMPTS) {
-    out.push({ cameraSelect: CAMERA_FACING, stream });
-  }
   return out;
 }
 
