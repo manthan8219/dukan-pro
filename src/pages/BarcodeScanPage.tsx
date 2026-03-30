@@ -39,12 +39,48 @@ const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
   Html5QrcodeSupportedFormats.DATA_MATRIX,
 ];
 
-/** High resolution + back camera — html5-qrcode samples the qrbox region every frame */
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: 'environment' },
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-};
+/**
+ * html5-qrcode requires start(cameraIdOrConfig) to be EITHER a device id string OR an object
+ * with exactly one key: `facingMode` or `deviceId`. Width/height belong in config.videoConstraints.
+ */
+const CAMERA_FACING: { facingMode: string } = { facingMode: 'environment' };
+
+const STREAM_CONSTRAINT_ATTEMPTS: MediaStreamConstraints[] = [
+  {
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    },
+  },
+  {
+    audio: false,
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+    },
+  },
+  {
+    audio: false,
+    video: { facingMode: 'environment' },
+  },
+];
+
+function formatScannerError(e: unknown): string {
+  const raw =
+    typeof e === 'string' ? e : e instanceof Error ? e.message : '';
+  const m = raw.toLowerCase();
+  if (m.includes('notallowed') || m.includes('permission')) {
+    return 'Camera permission denied — allow camera for this site and try again.';
+  }
+  if (m.includes('notfound') || m.includes('no camera')) {
+    return 'No usable camera found on this device.';
+  }
+  if (raw) return raw;
+  return 'Camera or scanner failed';
+}
 
 let scanAudioContext: AudioContext | null = null;
 
@@ -176,39 +212,90 @@ export function BarcodeScanPage() {
     setCameraPreviewOn(false);
     setScannerLive(false);
 
-    const scanner = new Html5Qrcode(html5RootId, {
-      verbose: false,
-      formatsToSupport: BARCODE_FORMATS,
-      useBarCodeDetectorIfSupported: true,
-    });
-    scannerRef.current = scanner;
+    const scanConfigBase = {
+      fps: 30,
+      qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+        const vw = Math.max(viewfinderWidth, 1);
+        const vh = Math.max(viewfinderHeight, 1);
+        const w = Math.min(Math.floor(vw * 0.96), vw - 2);
+        const h = Math.min(
+          Math.floor(Math.min(vh * 0.55, vw * 0.42)),
+          vh - 2,
+        );
+        return {
+          width: Math.max(50, w),
+          height: Math.max(50, h),
+        };
+      },
+      disableFlip: false,
+    };
 
     void (async () => {
-      try {
+      let lastError: unknown;
+      let scanner: Html5Qrcode | null = null;
+
+      const tryOnce = async (
+        streamConstraints: MediaStreamConstraints,
+        useNativeDetector: boolean,
+      ): Promise<boolean> => {
+        if (!alive) return false;
+        try {
+          if (scanner?.isScanning) {
+            await scanner.stop().catch(() => undefined);
+          }
+          scanner?.clear();
+        } catch {
+          /* ignore */
+        }
+
+        scanner = new Html5Qrcode(html5RootId, {
+          verbose: false,
+          formatsToSupport: BARCODE_FORMATS,
+          useBarCodeDetectorIfSupported: useNativeDetector,
+        });
+        scannerRef.current = scanner;
+
         await scanner.start(
-          VIDEO_CONSTRAINTS,
+          CAMERA_FACING,
           {
-            fps: 30,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const w = Math.floor(viewfinderWidth * 0.96);
-              const h = Math.floor(
-                Math.min(viewfinderHeight * 0.55, viewfinderWidth * 0.42),
-              );
-              return { width: w, height: Math.max(h, 120) };
-            },
-            disableFlip: false,
+            ...scanConfigBase,
+            // Library merges this into getUserMedia(); typings incorrectly say MediaTrackConstraints.
+            videoConstraints:
+              streamConstraints as unknown as MediaTrackConstraints,
           },
           (decodedText) => {
             if (alive) handleDecodedText(decodedText);
           },
           () => {
-            /* no code in frame — expected every frame */
+            /* no code in frame */
           },
         );
+        return true;
+      };
+
+      try {
+        let started = false;
+        for (const streamConstraints of STREAM_CONSTRAINT_ATTEMPTS) {
+          for (const useNative of [true, false]) {
+            try {
+              started = await tryOnce(streamConstraints, useNative);
+              if (started) break;
+            } catch (e) {
+              lastError = e;
+            }
+          }
+          if (started) break;
+        }
+
+        if (!started) {
+          throw lastError ?? new Error('Could not start camera');
+        }
+
+        scanner = scannerRef.current;
 
         if (!alive) {
-          if (scanner.isScanning) await scanner.stop().catch(() => undefined);
-          scanner.clear();
+          if (scanner?.isScanning) await scanner.stop().catch(() => undefined);
+          scanner?.clear();
           return;
         }
 
@@ -231,9 +318,7 @@ export function BarcodeScanPage() {
         setScannerLive(true);
       } catch (e) {
         if (alive) {
-          setCameraError(
-            e instanceof Error ? e.message : 'Camera or scanner failed',
-          );
+          setCameraError(formatScannerError(e));
         }
       }
     })();
