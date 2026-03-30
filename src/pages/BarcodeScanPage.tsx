@@ -22,14 +22,78 @@ const NATIVE_DETECT_INTERVAL_MS = 80;
 /** ZXing attempts; lower = snappier but more CPU */
 const ZXING_DECODE_INTERVAL_MS = 90;
 
+/** 720p-ish: often focuses more reliably than max resolution up close */
 const VIDEO_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
   video: {
     facingMode: { ideal: 'environment' },
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
   },
 };
+
+let scanAudioContext: AudioContext | null = null;
+
+function getScanAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  const AC =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!AC) return null;
+  if (!scanAudioContext || scanAudioContext.state === 'closed') {
+    scanAudioContext = new AC();
+  }
+  return scanAudioContext;
+}
+
+/** Call once from a user gesture (tap) so the beep is not blocked by the browser. */
+async function unlockScanAudio(): Promise<boolean> {
+  const ctx = getScanAudioContext();
+  if (!ctx) return false;
+  if (ctx.state === 'suspended') await ctx.resume().catch(() => undefined);
+  return ctx.state === 'running';
+}
+
+function playScanFeedback(): void {
+  const ctx = getScanAudioContext();
+  if (!ctx) return;
+
+  const run = (): void => {
+    const t0 = ctx.currentTime;
+    const master = ctx.createGain();
+    master.connect(ctx.destination);
+    master.gain.setValueAtTime(0.0001, t0);
+    master.gain.exponentialRampToValueAtTime(0.28, t0 + 0.025);
+    master.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
+
+    const o1 = ctx.createOscillator();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(880, t0);
+    o1.connect(master);
+    o1.start(t0);
+    o1.stop(t0 + 0.11);
+
+    const o2 = ctx.createOscillator();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(1174, t0 + 0.09);
+    o2.connect(master);
+    o2.start(t0 + 0.09);
+    o2.stop(t0 + 0.24);
+  };
+
+  if (ctx.state === 'suspended') {
+    void ctx.resume().then(run).catch(() => undefined);
+  } else {
+    run();
+  }
+
+  try {
+    navigator.vibrate?.([35, 50, 35]);
+  } catch {
+    /* ignore */
+  }
+}
 
 type BarcodeDetectorInstance = {
   detect: (source: HTMLVideoElement) => Promise<Array<{ rawValue: string }>>;
@@ -73,37 +137,6 @@ function tryCreateNativeDetector(): BarcodeDetectorInstance | null {
   return null;
 }
 
-function playScanFeedback(): void {
-  try {
-    const Ctx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext })
-        .webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.value = 920;
-    const t0 = ctx.currentTime;
-    gain.gain.setValueAtTime(0.0001, t0);
-    gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
-    osc.start(t0);
-    osc.stop(t0 + 0.11);
-    void ctx.close();
-  } catch {
-    /* ignore */
-  }
-  try {
-    navigator.vibrate?.(45);
-  } catch {
-    /* ignore */
-  }
-}
-
 export function BarcodeScanPage() {
   const headingId = useId();
   const [params] = useSearchParams();
@@ -123,6 +156,8 @@ export function BarcodeScanPage() {
     null,
   );
   const [lastSent, setLastSent] = useState<string | null>(null);
+  const [scanBang, setScanBang] = useState(0);
+  const [soundUnlocked, setSoundUnlocked] = useState(false);
   const lastRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const socketRef = useRef<Socket | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -162,6 +197,7 @@ export function BarcodeScanPage() {
     );
 
     playScanFeedback();
+    setScanBang((n) => n + 1);
     setLastSent(text);
 
     if (canSend) {
@@ -217,6 +253,16 @@ export function BarcodeScanPage() {
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
+        }
+        const vtrack = stream.getVideoTracks()[0];
+        if (vtrack?.applyConstraints) {
+          try {
+            await vtrack.applyConstraints({
+              advanced: [{ focusMode: 'continuous' }],
+            } as unknown as MediaTrackConstraints);
+          } catch {
+            /* not supported */
+          }
         }
         video.srcObject = stream;
         await video.play();
@@ -352,9 +398,9 @@ export function BarcodeScanPage() {
     ? 'Reconnecting…'
     : relayReady
       ? scannerBackend === 'native'
-        ? 'Live — native scanner (center barcode in frame)'
+        ? 'Live — two-tone beep + vibration on scan'
         : scannerBackend === 'zxing'
-          ? 'Live — center barcode; hold steady and use good light'
+          ? 'Live — hold steady; tap screen once if you hear no beep'
           : 'Live — starting scanner…'
       : 'Joining session… you can aim the camera now';
 
@@ -370,20 +416,43 @@ export function BarcodeScanPage() {
         {statusLine}
       </div>
 
-      <div className="barcodeScan__stage barcodeScan__stage--fullscreen">
+      <div
+        className="barcodeScan__stage barcodeScan__stage--fullscreen"
+        onPointerDown={() => {
+          void unlockScanAudio().then((ok) => {
+            if (ok) setSoundUnlocked(true);
+          });
+        }}
+      >
         <video
           ref={videoRef}
-          className="barcodeScan__viewport"
+          className="barcodeScan__viewport barcodeScan__viewport--contain"
           muted
           playsInline
           autoPlay
         />
         <div className="barcodeScan__reticle" aria-hidden>
-          <div className="barcodeScan__reticleFrame" />
+          <div
+            className={`barcodeScan__reticleBand${
+              scanBang > 0 ? ' barcodeScan__reticleBand--ping' : ''
+            }`}
+            key={scanBang}
+          >
+            <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--tl" />
+            <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--tr" />
+            <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--bl" />
+            <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--br" />
+          </div>
           <p className="barcodeScan__reticleHint">
-            Align the full barcode inside the frame — distance like scanning a QR code
+            Move back until the barcode looks sharp, then hold steady. Keep the whole barcode
+            inside the green band — farther away is usually clearer.
           </p>
         </div>
+        {cameraPreviewOn && !soundUnlocked ? (
+          <div className="barcodeScan__soundHint">
+            Tap the preview once to enable the scan beep
+          </div>
+        ) : null}
         {!cameraPreviewOn && !cameraError ? (
           <div className="barcodeScan__overlay">
             <p className="barcodeScan__hint">Starting camera…</p>
