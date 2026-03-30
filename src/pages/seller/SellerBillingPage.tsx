@@ -9,13 +9,8 @@ import {
   type BillingProfile,
   type SavedBill,
 } from './billingStorage';
-import {
-  buildBillPdf,
-  computeBillTotals,
-  pdfFileName,
-  type BillLineInput,
-  type GenerateBillInput,
-} from './generateBillPdf';
+import { computeBillTotals, pdfFileName, type BillLineInput, type GenerateBillInput } from './generateBillPdf';
+import { downloadGstBillPdf, printGstBill } from './gstBillPrintActions';
 import { gstStateCodeOptions, stateCodeFromGstin, stateNameFromCode } from './gstInvoiceUtils';
 import './seller-billing.css';
 
@@ -133,34 +128,11 @@ function openMailto(b: SavedBill): void {
 }
 
 function downloadBill(b: SavedBill): void {
-  const pdf = buildBillPdf(toGenerateInput(b));
-  pdf.save(pdfFileName(b.billNumber, b.type));
-}
-
-function blobUrlToString(blobUrl: string | URL): string {
-  return typeof blobUrl === 'string' ? blobUrl : blobUrl.href;
+  void downloadGstBillPdf(toGenerateInput(b), pdfFileName(b.billNumber, b.type));
 }
 
 function printBill(b: SavedBill): void {
-  const pdf = buildBillPdf(toGenerateInput(b));
-  const urlRaw = pdf.output('bloburl');
-  const url = blobUrlToString(urlRaw);
-  const iframe = document.createElement('iframe');
-  iframe.setAttribute('aria-hidden', 'true');
-  iframe.style.cssText = 'position:fixed;width:0;height:0;border:0;right:0;bottom:0;';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-  iframe.onload = () => {
-    const cw = iframe.contentWindow;
-    if (cw) {
-      cw.focus();
-      cw.print();
-    }
-    window.setTimeout(() => {
-      document.body.removeChild(iframe);
-      URL.revokeObjectURL(url);
-    }, 1500);
-  };
+  printGstBill(toGenerateInput(b));
 }
 
 export function SellerBillingPage() {
@@ -277,7 +249,7 @@ export function SellerBillingPage() {
     return null;
   }
 
-  function handleGenerate() {
+  async function handleGenerate() {
     setError(null);
     setOkMsg(null);
     const v = validateForm();
@@ -346,8 +318,13 @@ export function SellerBillingPage() {
     appendBill(bill);
     setHistory(loadBillHistory());
     setLastBill(bill);
-    buildBillPdf(toGenerateInput(bill)).save(pdfFileName(bill.billNumber, bill.type));
-    setOkMsg('PDF downloaded. You can print, email, or find it in history below.');
+    try {
+      await downloadGstBillPdf(toGenerateInput(bill), pdfFileName(bill.billNumber, bill.type));
+      setOkMsg('PDF downloaded. You can print, email, or find it in history below.');
+    } catch {
+      setError('Could not create the PDF. Try Print and use “Save as PDF”, or try again.');
+      setOkMsg(null);
+    }
     setCustomerName('');
     setCustomerEmail('');
     setCustomerPhone('');

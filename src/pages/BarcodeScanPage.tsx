@@ -69,7 +69,7 @@ const ENVIRONMENT_ATTEMPTS: ScanMediaAttempt[] = [
   { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: 'environment' } },
 ];
 
-function cameraLabelRank(label: string): number {
+ function cameraLabelRank(label: string): number {
   if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(label)) return -1;
   if (/back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(label)) return 2;
   return 0;

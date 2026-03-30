@@ -1,0 +1,186 @@
+/* GST bill print layout — adapted from GST-Bill-Generator (Bootstrap-like, no Bootstrap). */
+
+.gst-bill {
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #212529;
+  background: #fff;
+  padding: 1.5rem 1.25rem 2rem;
+  max-width: 100%;
+}
+
+.gst-bill *,
+.gst-bill *::before,
+.gst-bill *::after {
+  box-sizing: border-box;
+}
+
+.gst-bill__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.75rem 1rem;
+  align-items: start;
+  margin-bottom: 1rem;
+}
+
+.gst-bill__sellerBlock,
+.gst-bill__buyerBlock {
+  min-width: 0;
+}
+
+.gst-bill__sellerBlock input,
+.gst-bill__buyerBlock input {
+  border: none;
+  border-color: transparent !important;
+  background: transparent;
+  padding: 0.15rem 0;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.gst-bill__title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  text-align: center;
+  padding-top: 0.25rem;
+  letter-spacing: 0.02em;
+}
+
+.gst-bill__billTo {
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+}
+
+.gst-bill__meta {
+  margin-top: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.gst-bill__metaRow {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: 0.35rem;
+  align-items: baseline;
+  margin-bottom: 0.25rem;
+  max-width: 22rem;
+}
+
+.gst-bill__metaRow input {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  font: inherit;
+  width: 100%;
+}
+
+.gst-bill__tableWrap {
+  margin-top: 0.75rem;
+  overflow-x: auto;
+}
+
+.gst-bill table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.gst-bill th,
+.gst-bill td {
+  border: 1px solid #dee2e6;
+  padding: 0.35rem 0.45rem;
+  vertical-align: top;
+}
+
+.gst-bill thead th {
+  background: #212529;
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+}
+
+.gst-bill thead .gst-bill__thLeft {
+  text-align: left;
+}
+
+.gst-bill thead .gst-bill__thNum {
+  text-align: right;
+}
+
+.gst-bill tbody td {
+  background: #fff;
+}
+
+.gst-bill tbody .gst-bill__tdNum {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gst-bill tbody .gst-bill__tdCenter {
+  text-align: center;
+}
+
+.gst-bill__totalRow td {
+  font-weight: 600;
+  background: rgba(33, 37, 41, 0.12);
+}
+
+.gst-bill__totalRow .gst-bill__tdNum {
+  text-align: right;
+}
+
+.gst-bill__words {
+  margin-top: 1rem;
+  font-size: 11px;
+  max-width: 100%;
+}
+
+.gst-bill__footer {
+  margin-top: 1.5rem;
+  font-size: 10px;
+  color: #444;
+}
+
+.gst-bill__sign {
+  margin-top: 2rem;
+  text-align: right;
+  font-size: 11px;
+}
+
+.gst-bill__notes {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #dee2e6;
+}
+
+.gst-bill__notes h4 {
+  margin: 0 0 0.35rem;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gst-bill__notes p {
+  margin: 0 0 0.75rem;
+  font-size: 11px;
+  color: #333;
+}
+
+@media print {
+  .gst-bill {
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .gst-bill thead th {
+    background: #212529 !important;
+    color: #fff !important;
+  }
+
+  .gst-bill__metaRow input {
+    border: none !important;
+    padding: 0 !important;
+  }
+}
