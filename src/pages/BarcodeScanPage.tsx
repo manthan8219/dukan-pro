@@ -39,201 +39,81 @@ const BARCODE_FORMATS: Html5QrcodeSupportedFormats[] = [
   Html5QrcodeSupportedFormats.DATA_MATRIX,
 ];
 
-/**
- * html5-qrcode requires start(cameraIdOrConfig) to be EITHER a device id string OR an object
- * with exactly one key: `facingMode` or `deviceId`. Width/height belong in config.videoConstraints.
- */
-/** html5-qrcode allows only one key on this object */
-const CAMERA_FACING: { facingMode: string } = { facingMode: 'environment' };
-
 type CameraSelector = { facingMode: string } | { deviceId: string };
 
+/**
+ * html5-qrcode.start() config accepts `videoConstraints` as MediaTrackConstraints.
+ * The library wraps it as: { audio: false, video: videoConstraints } for getUserMedia.
+ * So videoConstraints must be ONLY the track-level keys (no outer audio/video wrapper).
+ * When videoConstraints is omitted, the library uses `cameraIdOrConfig` directly —
+ * which is the most compatible path on iOS Safari.
+ */
 type ScanMediaAttempt = {
   cameraSelect: CameraSelector;
-  stream: MediaStreamConstraints;
+  videoConstraints?: MediaTrackConstraints;
 };
 
-const STREAM_CONSTRAINT_ATTEMPTS: MediaStreamConstraints[] = [
-  {
-    audio: false,
-    video: {
-      facingMode: { exact: 'environment' },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-    },
-  },
-  {
-    audio: false,
-    video: {
-      facingMode: { exact: 'environment' },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-    },
-  },
-  {
-    audio: false,
-    video: {
-      facingMode: { ideal: 'environment' },
-      width: { ideal: 1920 },
-      height: { ideal: 1080 },
-    },
-  },
-  {
-    audio: false,
-    video: {
-      facingMode: { ideal: 'environment' },
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
-    },
-  },
-  {
-    audio: false,
-    video: { facingMode: 'environment' },
-  },
+const CAMERA_FACING: CameraSelector = { facingMode: 'environment' };
+
+/**
+ * Attempts in priority order. The first entry has NO videoConstraints so the library
+ * uses `cameraSelect: { facingMode: 'environment' }` natively — most reliable on iOS.
+ * Subsequent entries add resolution hints via properly-typed MediaTrackConstraints.
+ */
+const ENVIRONMENT_ATTEMPTS: ScanMediaAttempt[] = [
+  { cameraSelect: CAMERA_FACING },
+  { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+  { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: { exact: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+  { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+  { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } },
+  { cameraSelect: CAMERA_FACING, videoConstraints: { facingMode: 'environment' } },
 ];
 
 function cameraLabelRank(label: string): number {
-  const l = label.toLowerCase();
-  if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(l)) {
-    return -1;
-  }
-  if (
-    /back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(l)
-  ) {
-    return 2;
-  }
+  if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(label)) return -1;
+  if (/back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(label)) return 2;
   return 0;
 }
 
-/** Open a device briefly — the only reliable way to read facingMode on many Android builds */
-async function probeVideoDevice(
-  deviceId: string,
-): Promise<{ facingMode?: string; pixels: number } | null> {
-  if (!navigator.mediaDevices?.getUserMedia) return null;
-  let stream: MediaStream | null = null;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: { deviceId: { exact: deviceId } },
-    });
-    const s = stream.getVideoTracks()[0]?.getSettings();
-    if (!s) return null;
-    return {
-      facingMode: s.facingMode,
-      pixels: (s.width || 0) * (s.height || 0),
-    };
-  } catch {
-    return null;
-  } finally {
-    stream?.getTracks().forEach((t) => t.stop());
-  }
-}
-
 /**
- * Prefer the real back (environment) camera. Labels and enumerate order are wrong on many phones.
+ * Pick the most likely rear camera by label only — no probing.
+ * Probing (opening/closing each camera briefly) is unreliable on iOS and unnecessary
+ * because facingMode:environment is tried first before any device ID fallback.
  */
-async function pickRearCameraIdFromList(
+function pickRearCameraFromLabels(
   list: Array<{ id: string; label: string }>,
-): Promise<string | null> {
-  try {
-    if (!list.length) return null;
-
-    for (const c of list) {
-      if (cameraLabelRank(c.label || '') === 2) return c.id;
-    }
-
-    type Probed = {
-      id: string;
-      facingMode?: string;
-      pixels: number;
-      labelRank: number;
-    };
-
-    const probed: Probed[] = [];
-    for (const c of list) {
-      const p = await probeVideoDevice(c.id);
-      if (!p) continue;
-      probed.push({
-        id: c.id,
-        facingMode: p.facingMode,
-        pixels: p.pixels,
-        labelRank: cameraLabelRank(c.label || ''),
-      });
-    }
-
-    const envNotFrontLabel = probed.filter(
-      (x) => x.facingMode === 'environment' && x.labelRank !== -1,
-    );
-    if (envNotFrontLabel.length) return envNotFrontLabel[0]!.id;
-
-    const envAny = probed.filter((x) => x.facingMode === 'environment');
-    if (envAny.length) return envAny[0]!.id;
-
-    const notUserAndNotFrontName = probed.filter(
-      (x) => x.facingMode !== 'user' && x.labelRank !== -1,
-    );
-    if (notUserAndNotFrontName.length) {
-      notUserAndNotFrontName.sort((a, b) => b.pixels - a.pixels);
-      return notUserAndNotFrontName[0]!.id;
-    }
-
-    const notUser = probed.filter((x) => x.facingMode !== 'user');
-    if (notUser.length) {
-      notUser.sort((a, b) => b.pixels - a.pixels);
-      return notUser[0]!.id;
-    }
-
-    if (list.length >= 2) {
-      const nonFront = list.filter((c) => cameraLabelRank(c.label || '') !== -1);
-      const pool = nonFront.length ? nonFront : list;
-      return pool[pool.length - 1]!.id;
-    }
-
-    return list[0]!.id;
-  } catch {
-    return null;
-  }
+): string | null {
+  if (!list.length) return null;
+  const byLabel = list.find((c) => cameraLabelRank(c.label) === 2);
+  if (byLabel) return byLabel.id;
+  const nonFront = list.filter((c) => cameraLabelRank(c.label) !== -1);
+  const pool = nonFront.length ? nonFront : list;
+  return pool[pool.length - 1]!.id;
 }
 
 function buildScanAttempts(
   preferredDeviceId: string | null,
   allDeviceIds: string[],
 ): ScanMediaAttempt[] {
-  const out: ScanMediaAttempt[] = [];
+  // facingMode:environment attempts always come first (back camera via browser API)
+  const out: ScanMediaAttempt[] = [...ENVIRONMENT_ATTEMPTS];
   const seen = new Set<string>();
 
-  // Try facingMode:environment FIRST — the most reliable way to get the back camera.
-  // Device-ID enumeration is used only as a fallback because labels/order vary by device.
-  for (const stream of STREAM_CONSTRAINT_ATTEMPTS) {
-    out.push({ cameraSelect: CAMERA_FACING, stream });
-  }
-
+  // Device ID fallbacks for devices where facingMode doesn't work
   const pushDevice = (deviceId: string) => {
     if (!deviceId || seen.has(deviceId)) return;
     seen.add(deviceId);
     out.push({
-      cameraSelect: { deviceId: deviceId },
-      stream: {
-        audio: false,
-        video: {
-          deviceId: { exact: deviceId },
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      },
+      cameraSelect: { deviceId },
+      videoConstraints: { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } },
     });
     out.push({
-      cameraSelect: { deviceId: deviceId },
-      stream: {
-        audio: false,
-        video: { deviceId: { exact: deviceId } },
-      },
+      cameraSelect: { deviceId },
     });
   };
 
   if (preferredDeviceId) pushDevice(preferredDeviceId);
-  const rest = allDeviceIds.filter((id) => id !== preferredDeviceId);
-  rest.reverse();
+  const rest = allDeviceIds.filter((id) => id !== preferredDeviceId).reverse();
   for (const id of rest) pushDevice(id);
 
   return out;
@@ -397,11 +277,9 @@ export function BarcodeScanPage() {
       try {
         cameras = await Html5Qrcode.getCameras();
       } catch {
-        /* enumerate failed — fall back to facingMode-only attempts below */
+        /* enumerate failed — facingMode-only attempts cover this */
       }
-      const rearId = cameras.length
-        ? await pickRearCameraIdFromList(cameras)
-        : null;
+      const rearId = cameras.length ? pickRearCameraFromLabels(cameras) : null;
       const scanAttempts = buildScanAttempts(
         rearId,
         cameras.map((c) => c.id),
@@ -409,7 +287,7 @@ export function BarcodeScanPage() {
 
       const tryOnce = async (
         cameraSelect: CameraSelector,
-        streamConstraints: MediaStreamConstraints,
+        videoConstraints: MediaTrackConstraints | undefined,
         useNativeDetector: boolean,
       ): Promise<boolean> => {
         if (!alive) return false;
@@ -433,9 +311,12 @@ export function BarcodeScanPage() {
           cameraSelect,
           {
             ...scanConfigBase,
-            // Library merges this into getUserMedia(); typings incorrectly say MediaTrackConstraints.
-            videoConstraints:
-              streamConstraints as unknown as MediaTrackConstraints,
+            // When videoConstraints is undefined the library uses cameraSelect directly,
+            // which is the most compatible path (especially on iOS Safari).
+            // When provided, it must be MediaTrackConstraints (track-level keys only —
+            // no outer audio/video wrapper) because the library wraps it as
+            // { audio: false, video: videoConstraints } for getUserMedia.
+            ...(videoConstraints !== undefined ? { videoConstraints } : {}),
           },
           (decodedText) => {
             if (alive) handleDecodedText(decodedText);
@@ -454,7 +335,7 @@ export function BarcodeScanPage() {
             try {
               started = await tryOnce(
                 att.cameraSelect,
-                att.stream,
+                att.videoConstraints,
                 useNative,
               );
               if (started) break;
