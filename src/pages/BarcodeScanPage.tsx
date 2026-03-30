@@ -92,41 +92,99 @@ const STREAM_CONSTRAINT_ATTEMPTS: MediaStreamConstraints[] = [
   },
 ];
 
-/** Pick a physical back camera when labels / device order allow it */
-async function resolveRearCameraDeviceId(): Promise<string | null> {
+function cameraLabelRank(label: string): number {
+  const l = label.toLowerCase();
+  if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(l)) {
+    return -1;
+  }
+  if (
+    /back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(l)
+  ) {
+    return 2;
+  }
+  return 0;
+}
+
+/** Open a device briefly — the only reliable way to read facingMode on many Android builds */
+async function probeVideoDevice(
+  deviceId: string,
+): Promise<{ facingMode?: string; pixels: number } | null> {
+  if (!navigator.mediaDevices?.getUserMedia) return null;
+  let stream: MediaStream | null = null;
   try {
-    const list = await Html5Qrcode.getCameras();
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { deviceId: { exact: deviceId } },
+    });
+    const s = stream.getVideoTracks()[0]?.getSettings();
+    if (!s) return null;
+    return {
+      facingMode: s.facingMode,
+      pixels: (s.width || 0) * (s.height || 0),
+    };
+  } catch {
+    return null;
+  } finally {
+    stream?.getTracks().forEach((t) => t.stop());
+  }
+}
+
+/**
+ * Prefer the real back (environment) camera. Labels and enumerate order are wrong on many phones.
+ */
+async function pickRearCameraIdFromList(
+  list: Array<{ id: string; label: string }>,
+): Promise<string | null> {
+  try {
     if (!list.length) return null;
 
-    const rank = (label: string): number => {
-      const l = label.toLowerCase();
-      if (/front|selfie|user|facial|face\s*time|true\s*depth|iris/i.test(l)) {
-        return -1;
-      }
-      if (
-        /back|rear|environment|wide|tele|ultra|world|дальний|后置|trás|arrière/i.test(
-          l,
-        )
-      ) {
-        return 2;
-      }
-      return 0;
+    for (const c of list) {
+      if (cameraLabelRank(c.label || '') === 2) return c.id;
+    }
+
+    type Probed = {
+      id: string;
+      facingMode?: string;
+      pixels: number;
+      labelRank: number;
     };
 
-    let bestId: string | null = null;
-    let bestRank = -999;
+    const probed: Probed[] = [];
     for (const c of list) {
-      const r = rank(c.label || '');
-      if (r < 0) continue;
-      if (r > bestRank) {
-        bestRank = r;
-        bestId = c.id;
-      }
+      const p = await probeVideoDevice(c.id);
+      if (!p) continue;
+      probed.push({
+        id: c.id,
+        facingMode: p.facingMode,
+        pixels: p.pixels,
+        labelRank: cameraLabelRank(c.label || ''),
+      });
     }
-    if (bestRank >= 2 && bestId) return bestId;
+
+    const envNotFrontLabel = probed.filter(
+      (x) => x.facingMode === 'environment' && x.labelRank !== -1,
+    );
+    if (envNotFrontLabel.length) return envNotFrontLabel[0]!.id;
+
+    const envAny = probed.filter((x) => x.facingMode === 'environment');
+    if (envAny.length) return envAny[0]!.id;
+
+    const notUserAndNotFrontName = probed.filter(
+      (x) => x.facingMode !== 'user' && x.labelRank !== -1,
+    );
+    if (notUserAndNotFrontName.length) {
+      notUserAndNotFrontName.sort((a, b) => b.pixels - a.pixels);
+      return notUserAndNotFrontName[0]!.id;
+    }
+
+    const notUser = probed.filter((x) => x.facingMode !== 'user');
+    if (notUser.length) {
+      notUser.sort((a, b) => b.pixels - a.pixels);
+      return notUser[0]!.id;
+    }
 
     if (list.length >= 2) {
-      const nonFront = list.filter((c) => rank(c.label || '') !== -1);
+      const nonFront = list.filter((c) => cameraLabelRank(c.label || '') !== -1);
       const pool = nonFront.length ? nonFront : list;
       return pool[pool.length - 1]!.id;
     }
@@ -137,28 +195,41 @@ async function resolveRearCameraDeviceId(): Promise<string | null> {
   }
 }
 
-function buildScanAttempts(rearDeviceId: string | null): ScanMediaAttempt[] {
+function buildScanAttempts(
+  preferredDeviceId: string | null,
+  allDeviceIds: string[],
+): ScanMediaAttempt[] {
   const out: ScanMediaAttempt[] = [];
-  if (rearDeviceId) {
+  const seen = new Set<string>();
+
+  const pushDevice = (deviceId: string) => {
+    if (!deviceId || seen.has(deviceId)) return;
+    seen.add(deviceId);
     out.push({
-      cameraSelect: { deviceId: rearDeviceId },
+      cameraSelect: { deviceId: deviceId },
       stream: {
         audio: false,
         video: {
-          deviceId: { exact: rearDeviceId },
+          deviceId: { exact: deviceId },
           width: { ideal: 1920 },
           height: { ideal: 1080 },
         },
       },
     });
     out.push({
-      cameraSelect: { deviceId: rearDeviceId },
+      cameraSelect: { deviceId: deviceId },
       stream: {
         audio: false,
-        video: { deviceId: { exact: rearDeviceId } },
+        video: { deviceId: { exact: deviceId } },
       },
     });
-  }
+  };
+
+  if (preferredDeviceId) pushDevice(preferredDeviceId);
+  const rest = allDeviceIds.filter((id) => id !== preferredDeviceId);
+  rest.reverse();
+  for (const id of rest) pushDevice(id);
+
   for (const stream of STREAM_CONSTRAINT_ATTEMPTS) {
     out.push({ cameraSelect: CAMERA_FACING, stream });
   }
@@ -319,8 +390,19 @@ export function BarcodeScanPage() {
       let lastError: unknown;
       let scanner: Html5Qrcode | null = null;
 
-      const rearId = await resolveRearCameraDeviceId();
-      const scanAttempts = buildScanAttempts(rearId);
+      let cameras: Array<{ id: string; label: string }> = [];
+      try {
+        cameras = await Html5Qrcode.getCameras();
+      } catch {
+        /* enumerate failed — fall back to facingMode-only attempts below */
+      }
+      const rearId = cameras.length
+        ? await pickRearCameraIdFromList(cameras)
+        : null;
+      const scanAttempts = buildScanAttempts(
+        rearId,
+        cameras.map((c) => c.id),
+      );
 
       const tryOnce = async (
         cameraSelect: CameraSelector,
