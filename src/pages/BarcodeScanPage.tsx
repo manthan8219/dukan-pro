@@ -263,10 +263,19 @@ export function BarcodeScanPage() {
     setCameraPreviewOn(false);
     setScannerLive(false);
 
-    /** No `qrbox` — avoids html5-qrcode’s second overlay (shaded box + corner brackets) */
     const scanConfigBase = {
       fps: 30,
-      disableFlip: false,
+      // Back camera never produces a mirrored image, so flipping is wasteful.
+      // disableFlip:false makes the library decode every missed frame TWICE
+      // (normal + horizontally flipped), which halves effective scan throughput on iOS.
+      disableFlip: true,
+      // qrbox covering 95 % × 90 % of the viewfinder reduces the decode canvas
+      // (fewer pixels per tick) while keeping nearly the full frame in range.
+      // The library’s shaded overlay is suppressed by CSS (#qr-shaded-region { display:none }).
+      qrbox: (vfWidth: number, vfHeight: number) => ({
+        width: Math.round(vfWidth * 0.95),
+        height: Math.round(vfHeight * 0.90),
+      }),
     };
 
     void (async () => {
@@ -520,8 +529,8 @@ export function BarcodeScanPage() {
             <span className="barcodeScan__reticleCorner barcodeScan__reticleCorner--br" />
           </div>
           <p className="barcodeScan__reticleHint">
-            Hold the barcode flat inside the band. The scanner reads the center area very quickly —
-            move back slightly if the image looks blurry.
+            Point at any barcode or QR code — the whole frame is scanned instantly.
+            Move back slightly if the image looks blurry.
           </p>
         </div>
         {cameraPreviewOn && !soundUnlocked ? (
