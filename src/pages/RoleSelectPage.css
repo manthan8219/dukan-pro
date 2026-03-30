@@ -1,9 +1,9 @@
 /* Premium role selection — post-registration */
 
 .rolePick {
-  --rp-ink: #042f2e;
-  --rp-mint: #5eead4;
-  --rp-mint-deep: #14b8a6;
+  --rp-ink: #431407;
+  --rp-mint: #fbbf24;
+  --rp-mint-deep: #f59e0b;
   --rp-gold: #fcd34d;
   --rp-sky: #7dd3fc;
   --rp-rose: #fda4af;
@@ -28,10 +28,10 @@
   inset: 0;
   z-index: 0;
   background:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(94, 234, 212, 0.45) 0%, transparent 55%),
-    radial-gradient(ellipse 80% 60% at 100% 50%, rgba(167, 139, 250, 0.22) 0%, transparent 50%),
-    radial-gradient(ellipse 70% 50% at 0% 80%, rgba(253, 164, 175, 0.18) 0%, transparent 45%),
-    linear-gradient(168deg, #022c26 0%, #064e3b 35%, #0f3d3a 70%, #042f2e 100%);
+    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(245, 158, 11, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 60% at 100% 50%, rgba(167, 139, 250, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse 70% 50% at 0% 80%, rgba(251, 191, 36, 0.1) 0%, transparent 45%),
+    linear-gradient(168deg, #060d1a 0%, #0f172a 35%, #1e293b 70%, #0f172a 100%);
   pointer-events: none;
 }
 
@@ -63,7 +63,7 @@
   height: min(420px, 90vw);
   top: -12%;
   right: -8%;
-  background: radial-gradient(circle, rgba(94, 234, 212, 0.5) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.3) 0%, transparent 70%);
   animation-delay: 0s;
 }
 
@@ -72,7 +72,7 @@
   height: min(360px, 75vw);
   bottom: -10%;
   left: -12%;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.4) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.2) 0%, transparent 70%);
   animation-delay: -7s;
 }
 
@@ -116,8 +116,8 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--rp-ink);
-  background: linear-gradient(135deg, var(--rp-mint) 0%, #99f6e4 100%);
-  box-shadow: 0 0 32px rgba(94, 234, 212, 0.45), 0 4px 16px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, var(--rp-mint) 0%, #fde68a 100%);
+  box-shadow: 0 0 32px rgba(245, 158, 11, 0.4), 0 4px 16px rgba(0, 0, 0, 0.2);
   margin-bottom: 1.1rem;
 }
 
@@ -150,7 +150,7 @@
 }
 
 .rolePick__titleGrad {
-  background: linear-gradient(105deg, #fff 0%, #ccfbf1 45%, #e0e7ff 100%);
+  background: linear-gradient(105deg, #fff 0%, #fef3c7 45%, #e0e7ff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -199,7 +199,7 @@
 }
 
 .rolePick__card:focus-visible {
-  outline: 3px solid var(--rp-mint);
+  outline: 3px solid rgba(245, 158, 11, 0.7);
   outline-offset: 4px;
 }
 
@@ -224,13 +224,13 @@
 }
 
 .rolePick__card--seller {
-  background: linear-gradient(155deg, rgba(6, 78, 59, 0.9) 0%, rgba(4, 47, 46, 0.95) 50%, rgba(2, 44, 38, 0.98) 100%);
-  border: 1px solid rgba(94, 234, 212, 0.45);
+  background: linear-gradient(155deg, rgba(15, 23, 42, 0.9) 0%, rgba(6, 13, 26, 0.95) 50%, rgba(6, 13, 26, 0.98) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.45);
 }
 
 .rolePick__card--seller:hover {
   transform: translateY(-6px) scale(1.01);
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(94, 234, 212, 0.55), 0 0 72px rgba(94, 234, 212, 0.2);
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 72px rgba(245, 158, 11, 0.18);
 }
 
 .rolePick__cardShine {
@@ -272,7 +272,7 @@
 }
 
 .rolePick__card--seller .rolePick__iconWrap {
-  background: linear-gradient(145deg, rgba(94, 234, 212, 0.4) 0%, rgba(20, 184, 166, 0.2) 100%);
+  background: linear-gradient(145deg, rgba(245, 158, 11, 0.4) 0%, rgba(217, 119, 6, 0.2) 100%);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   color: var(--rp-mint);
 }
@@ -299,7 +299,7 @@
 
 .rolePick__card--seller .rolePick__tag {
   color: var(--rp-ink);
-  background: linear-gradient(135deg, var(--rp-mint) 0%, #99f6e4 100%);
+  background: linear-gradient(135deg, var(--rp-mint) 0%, #fde68a 100%);
 }
 
 .rolePick__cardTitle {
@@ -351,7 +351,7 @@
 
 .rolePick__card--seller .rolePick__perks li::before {
   background: var(--rp-mint);
-  box-shadow: 0 0 10px var(--rp-mint);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
 }
 
 .rolePick__cardFooter {
@@ -396,7 +396,7 @@
 }
 
 .rolePick__card--seller .rolePick__ctaArrow {
-  background: rgba(94, 234, 212, 0.22);
+  background: rgba(245, 158, 11, 0.22);
   color: var(--rp-mint);
 }
 
