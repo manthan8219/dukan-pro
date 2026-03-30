@@ -12,10 +12,10 @@
     "@emotion/is-prop-valid": "^1.4.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
+    "@zxing/library": "^0.20.0",
     "canvas-confetti": "^1.9.4",
     "firebase": "^12.11.0",
     "framer-motion": "^12.38.0",
-    "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.7",
     "maplibre-gl": "^5.21.1",
@@ -23,6 +23,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.2",
+    "react-zxing": "^2.1.0",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
