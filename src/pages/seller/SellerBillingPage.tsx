@@ -21,6 +21,7 @@ type FormLine = {
   quantity: number;
   unit: string;
   unitPrice: number;
+  discountPercent: number;
   gstPercent: number;
 };
 
@@ -32,40 +33,71 @@ function newLine(): FormLine {
     quantity: 1,
     unit: 'NOS',
     unitPrice: 0,
+    discountPercent: 0,
     gstPercent: 18,
   };
 }
 
 function toGenerateInput(b: SavedBill): GenerateBillInput {
+  const p = loadBillingProfile();
   const lines = b.lines.map((l) => ({
     description: l.description,
     hsnCode: l.hsnCode,
     quantity: l.quantity,
     unit: l.unit?.trim() || 'NOS',
     unitPrice: l.unitPrice,
+    discountPercent: l.discountPercent ?? 0,
     gstPercent: l.gstPercent,
   }));
+  const billDate = new Date(b.createdAt).toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+  let dueDate = billDate;
+  if (b.dueDate) {
+    const d = new Date(b.dueDate);
+    if (!Number.isNaN(d.getTime())) {
+      dueDate = d.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+  }
   const base: GenerateBillInput = {
     billNumber: b.billNumber,
-    billDate: new Date(b.createdAt).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    }),
+    billDate,
+    dueDate,
     type: b.type,
     seller: {
       name: b.sellerName,
       gstin: b.sellerGstin,
       address: b.sellerAddress,
       phone: b.sellerPhone,
+      email: b.sellerEmail?.trim() || p.email?.trim(),
+      pan: b.sellerPan?.trim() || p.pan?.trim(),
+      fssai: b.sellerFssai?.trim() || p.fssai?.trim(),
+      bankName: b.bankName?.trim() || p.bankName?.trim(),
+      bankAccount: b.bankAccount?.trim() || p.bankAccount?.trim(),
+      bankIfsc: b.bankIfsc?.trim() || p.bankIfsc?.trim(),
+      bankBranch: b.bankBranch?.trim() || p.bankBranch?.trim(),
+      accountHolderName: b.accountHolderName?.trim() || p.accountHolderName?.trim(),
     },
     customer: {
       name: b.customerName,
       email: b.customerEmail,
       phone: b.customerPhone,
       address: b.customerAddress,
+      fssai: b.customerFssai?.trim(),
+      shipToName: b.shipToName?.trim(),
+      shipToAddress: b.shipToAddress?.trim(),
+      shipToPhone: b.shipToPhone?.trim(),
+      shipToGstin: b.shipToGstin?.trim(),
+      sameShippingAsBilling: b.sameShippingAsBilling !== false,
     },
     lines,
+    termsAndConditions: p.termsAndConditions,
   };
   if (b.type === 'gst') {
     const fallbackCode = (stateCodeFromGstin(b.sellerGstin) ?? '').padStart(2, '0').slice(0, 2);
@@ -152,6 +184,13 @@ export function SellerBillingPage() {
   const [placeOfSupplyStateCode, setPlaceOfSupplyStateCode] = useState('');
   const [placeOfSupplyStateName, setPlaceOfSupplyStateName] = useState('');
   const [reverseCharge, setReverseCharge] = useState(false);
+  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [customerFssai, setCustomerFssai] = useState('');
+  const [sameShippingAsBilling, setSameShippingAsBilling] = useState(true);
+  const [shipToName, setShipToName] = useState('');
+  const [shipToAddress, setShipToAddress] = useState('');
+  const [shipToPhone, setShipToPhone] = useState('');
+  const [shipToGstin, setShipToGstin] = useState('');
   const [lines, setLines] = useState<FormLine[]>(() => [newLine()]);
 
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +220,7 @@ export function SellerBillingPage() {
         quantity: l.quantity,
         unit: (l.unit || 'NOS').trim() || 'NOS',
         unitPrice: l.unitPrice,
+        discountPercent: l.discountPercent,
         gstPercent: l.gstPercent,
       })),
     [lines],
@@ -245,6 +285,9 @@ export function SellerBillingPage() {
           return 'GST % on each line should be between 0 and 99.';
         }
       }
+      if (!Number.isFinite(l.discountPercent) || l.discountPercent < 0 || l.discountPercent > 100) {
+        return 'Line discount % must be between 0 and 100.';
+      }
     }
     return null;
   }
@@ -265,6 +308,7 @@ export function SellerBillingPage() {
       quantity: l.quantity,
       unit: (l.unit || 'NOS').trim() || 'NOS',
       unitPrice: l.unitPrice,
+      discountPercent: l.discountPercent,
       gstPercent: billType === 'gst' ? l.gstPercent : 0,
     }));
 
@@ -274,6 +318,7 @@ export function SellerBillingPage() {
       quantity: s.quantity,
       unit: s.unit,
       unitPrice: s.unitPrice,
+      discountPercent: s.discountPercent ?? 0,
       gstPercent: s.gstPercent,
     }));
     const totals = computeBillTotals(
@@ -284,6 +329,8 @@ export function SellerBillingPage() {
 
     const posCode = placeOfSupplyStateCode.trim().padStart(2, '0').slice(0, 2);
 
+    const dueIso = dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : undefined;
+
     const bill: SavedBill = {
       id: crypto.randomUUID(),
       billNumber: nextBillNumber(),
@@ -293,10 +340,27 @@ export function SellerBillingPage() {
       customerEmail: customerEmail.trim(),
       customerPhone: customerPhone.trim(),
       customerAddress: customerAddress.trim(),
+      customerFssai: customerFssai.trim() || undefined,
+      dueDate: dueIso,
+      sameShippingAsBilling,
+      shipToName: sameShippingAsBilling ? undefined : shipToName.trim() || undefined,
+      shipToAddress: sameShippingAsBilling ? undefined : shipToAddress.trim() || undefined,
+      shipToPhone: sameShippingAsBilling ? undefined : shipToPhone.trim() || undefined,
+      shipToGstin: sameShippingAsBilling
+        ? undefined
+        : shipToGstin.trim().toUpperCase().replace(/\s/g, '') || undefined,
       sellerName: profile.businessName.trim(),
       sellerGstin: profile.gstin.trim(),
       sellerAddress: profile.address.trim(),
       sellerPhone: profile.phone.trim(),
+      sellerEmail: profile.email.trim() || undefined,
+      sellerPan: profile.pan.trim() || undefined,
+      sellerFssai: profile.fssai.trim() || undefined,
+      bankName: profile.bankName.trim() || undefined,
+      bankAccount: profile.bankAccount.trim() || undefined,
+      bankIfsc: profile.bankIfsc.trim() || undefined,
+      bankBranch: profile.bankBranch.trim() || undefined,
+      accountHolderName: profile.accountHolderName.trim() || undefined,
       lines: snapshots,
       taxableTotal: totals.taxableTotal,
       gstTotal: totals.gstTotal,
@@ -304,6 +368,7 @@ export function SellerBillingPage() {
       sgst: totals.sgst,
       igst: totals.igst,
       grandTotal: totals.grandTotal,
+      totalDiscountAmount: totals.totalDiscountAmount,
       ...(billType === 'gst'
         ? {
             gstSupplyType,
@@ -330,7 +395,14 @@ export function SellerBillingPage() {
     setCustomerPhone('');
     setCustomerAddress('');
     setCustomerGstin('');
+    setCustomerFssai('');
     setReverseCharge(false);
+    setDueDate(new Date().toISOString().slice(0, 10));
+    setSameShippingAsBilling(true);
+    setShipToName('');
+    setShipToAddress('');
+    setShipToPhone('');
+    setShipToGstin('');
     setLines([newLine()]);
   }
 
@@ -339,9 +411,9 @@ export function SellerBillingPage() {
       <div className="sdash__panel">
         <h2>Billing & payouts</h2>
         <p className="bill__intro">
-          Create an India-style <strong>tax invoice</strong> (supplier / receiver blocks, HSN/SAC, CGST–SGST or IGST, HSN
-          tax summary, amount in words) or a simple <strong>quotation</strong>. Data stays in this browser.{' '}
-          <strong>Email</strong> opens your mail app — attach the PDF yourself (mailto cannot send attachments).
+          Create a <strong>standard India GST tax invoice</strong> (billing &amp; shipping blocks, line items with list price
+          &amp; discount, tax %, amount in words, bank details, terms, QR placeholders) or a <strong>quotation</strong>.
+          Data stays in this browser. <strong>Email</strong> opens your mail app — attach the PDF yourself.
         </p>
       </div>
 
@@ -397,6 +469,108 @@ export function SellerBillingPage() {
             value={profile.phone}
             onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
             placeholder="+91 …"
+          />
+
+          <label className="bill__label" htmlFor="bill-seller-email">
+            Email (on invoice)
+          </label>
+          <input
+            id="bill-seller-email"
+            className="bill__input"
+            type="email"
+            value={profile.email}
+            onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+            placeholder="shop@example.com"
+          />
+
+          <label className="bill__label" htmlFor="bill-seller-pan">
+            PAN (optional if same as GSTIN)
+          </label>
+          <input
+            id="bill-seller-pan"
+            className="bill__input"
+            value={profile.pan}
+            onChange={(e) => setProfile((p) => ({ ...p, pan: e.target.value.toUpperCase() }))}
+            placeholder="AAAAA0000A"
+            maxLength={10}
+          />
+
+          <label className="bill__label" htmlFor="bill-seller-fssai">
+            FSSAI (food businesses, optional)
+          </label>
+          <input
+            id="bill-seller-fssai"
+            className="bill__input"
+            value={profile.fssai}
+            onChange={(e) => setProfile((p) => ({ ...p, fssai: e.target.value }))}
+            placeholder="Licence number"
+          />
+
+          <p className="bill__cardHint" style={{ marginTop: '0.75rem' }}>
+            Bank details (printed on invoice)
+          </p>
+          <label className="bill__label" htmlFor="bill-bank-name">
+            Bank name
+          </label>
+          <input
+            id="bill-bank-name"
+            className="bill__input"
+            value={profile.bankName}
+            onChange={(e) => setProfile((p) => ({ ...p, bankName: e.target.value }))}
+          />
+          <label className="bill__label" htmlFor="bill-bank-acct">
+            Account number
+          </label>
+          <input
+            id="bill-bank-acct"
+            className="bill__input"
+            value={profile.bankAccount}
+            onChange={(e) => setProfile((p) => ({ ...p, bankAccount: e.target.value }))}
+          />
+          <div className="bill__row2">
+            <div>
+              <label className="bill__label" htmlFor="bill-bank-ifsc">
+                IFSC
+              </label>
+              <input
+                id="bill-bank-ifsc"
+                className="bill__input"
+                value={profile.bankIfsc}
+                onChange={(e) => setProfile((p) => ({ ...p, bankIfsc: e.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div>
+              <label className="bill__label" htmlFor="bill-bank-branch">
+                Branch
+              </label>
+              <input
+                id="bill-bank-branch"
+                className="bill__input"
+                value={profile.bankBranch}
+                onChange={(e) => setProfile((p) => ({ ...p, bankBranch: e.target.value }))}
+              />
+            </div>
+          </div>
+          <label className="bill__label" htmlFor="bill-bank-holder">
+            Account holder name
+          </label>
+          <input
+            id="bill-bank-holder"
+            className="bill__input"
+            value={profile.accountHolderName}
+            onChange={(e) => setProfile((p) => ({ ...p, accountHolderName: e.target.value }))}
+            placeholder="As per bank"
+          />
+
+          <label className="bill__label" htmlFor="bill-terms">
+            Terms &amp; conditions (printed)
+          </label>
+          <textarea
+            id="bill-terms"
+            className="bill__textarea"
+            rows={4}
+            value={profile.termsAndConditions}
+            onChange={(e) => setProfile((p) => ({ ...p, termsAndConditions: e.target.value }))}
           />
 
           <button type="button" className="bill__btn bill__btn--ghost" onClick={saveProfile}>
@@ -477,6 +651,88 @@ export function SellerBillingPage() {
             onChange={(e) => setCustomerAddress(e.target.value)}
             rows={2}
           />
+
+          <label className="bill__label" htmlFor="bill-due-date">
+            Due date
+          </label>
+          <input
+            id="bill-due-date"
+            className="bill__input"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+
+          <label className="bill__label" htmlFor="bill-cust-fssai">
+            Customer FSSAI (optional)
+          </label>
+          <input
+            id="bill-cust-fssai"
+            className="bill__input"
+            value={customerFssai}
+            onChange={(e) => setCustomerFssai(e.target.value)}
+            placeholder="If applicable"
+          />
+
+          <label
+            className="bill__label"
+            htmlFor="bill-same-ship"
+            style={{ textTransform: 'none', letterSpacing: 'normal' }}
+          >
+            <input
+              id="bill-same-ship"
+              type="checkbox"
+              checked={sameShippingAsBilling}
+              onChange={(e) => setSameShippingAsBilling(e.target.checked)}
+            />{' '}
+            Shipping address same as billing
+          </label>
+
+          {!sameShippingAsBilling ? (
+            <>
+              <h3 className="bill__cardTitle" style={{ marginTop: '0.75rem' }}>
+                Ship to
+              </h3>
+              <label className="bill__label" htmlFor="bill-ship-name">
+                Name
+              </label>
+              <input
+                id="bill-ship-name"
+                className="bill__input"
+                value={shipToName}
+                onChange={(e) => setShipToName(e.target.value)}
+              />
+              <label className="bill__label" htmlFor="bill-ship-phone">
+                Phone
+              </label>
+              <input
+                id="bill-ship-phone"
+                className="bill__input"
+                value={shipToPhone}
+                onChange={(e) => setShipToPhone(e.target.value)}
+              />
+              <label className="bill__label" htmlFor="bill-ship-gstin">
+                GSTIN (optional)
+              </label>
+              <input
+                id="bill-ship-gstin"
+                className="bill__input"
+                value={shipToGstin}
+                onChange={(e) => setShipToGstin(e.target.value.toUpperCase())}
+                maxLength={15}
+              />
+              <label className="bill__label" htmlFor="bill-ship-addr">
+                Address
+              </label>
+              <textarea
+                id="bill-ship-addr"
+                className="bill__textarea"
+                value={shipToAddress}
+                onChange={(e) => setShipToAddress(e.target.value)}
+                rows={2}
+              />
+            </>
+          ) : null}
 
           {billType === 'gst' ? (
             <>
@@ -567,8 +823,12 @@ export function SellerBillingPage() {
 
         {lines.map((line) => (
           <div key={line.id} className="bill__lineCard">
-            <div className={billType === 'gst' ? 'bill__lineGrid bill__lineGrid--gst' : 'bill__lineGrid'}>
-              <div style={{ gridColumn: billType === 'gst' ? 'span 2' : undefined }}>
+            <div
+              className={
+                billType === 'gst' ? 'bill__lineGrid bill__lineGrid--gst' : 'bill__lineGrid bill__lineGrid--quote'
+              }
+            >
+              <div style={{ gridColumn: 'span 2' }}>
                 <label className="bill__label">Description</label>
                 <input
                   className="bill__input"
@@ -614,7 +874,7 @@ export function SellerBillingPage() {
                 />
               </div>
               <div>
-                <label className="bill__label">Rate (INR)</label>
+                <label className="bill__label">List price (INR)</label>
                 <input
                   className="bill__input"
                   style={{ marginBottom: 0 }}
@@ -623,6 +883,19 @@ export function SellerBillingPage() {
                   step={0.01}
                   value={line.unitPrice}
                   onChange={(e) => patchLine(line.id, { unitPrice: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </div>
+              <div>
+                <label className="bill__label">Disc. %</label>
+                <input
+                  className="bill__input"
+                  style={{ marginBottom: 0 }}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={line.discountPercent}
+                  onChange={(e) => patchLine(line.id, { discountPercent: Math.min(100, Math.max(0, Number(e.target.value) || 0)) })}
                 />
               </div>
               {billType === 'gst' ? (
@@ -648,6 +921,12 @@ export function SellerBillingPage() {
         ))}
 
         <div className="bill__totals">
+          {liveTotals.totalDiscountAmount > 0 ? (
+            <div className="bill__totalsRow">
+              <span>Total discount</span>
+              <span>INR {liveTotals.totalDiscountAmount.toFixed(2)}</span>
+            </div>
+          ) : null}
           {billType === 'gst' && gstSupplyType === 'interstate' ? (
             <>
               <div className="bill__totalsRow">
@@ -676,7 +955,7 @@ export function SellerBillingPage() {
             </>
           ) : (
             <div className="bill__totalsRow">
-              <span>Subtotal</span>
+              <span>Subtotal (after discount)</span>
               <span>INR {liveTotals.grandTotal.toFixed(2)}</span>
             </div>
           )}

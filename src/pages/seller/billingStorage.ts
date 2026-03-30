@@ -6,6 +6,17 @@ export type BillingProfile = {
   gstin: string;
   address: string;
   phone: string;
+  email: string;
+  /** Optional; else PAN is taken from GSTIN in invoices */
+  pan: string;
+  fssai: string;
+  bankName: string;
+  bankAccount: string;
+  bankIfsc: string;
+  bankBranch: string;
+  accountHolderName: string;
+  /** Default terms for printed invoice */
+  termsAndConditions: string;
 };
 
 export type BillLineSnapshot = {
@@ -15,6 +26,8 @@ export type BillLineSnapshot = {
   /** Unit of measure (UQC), e.g. NOS, KGS */
   unit?: string;
   unitPrice: number;
+  /** Line discount % on qty × list price */
+  discountPercent?: number;
   gstPercent: number;
 };
 
@@ -27,10 +40,26 @@ export type SavedBill = {
   customerEmail: string;
   customerPhone: string;
   customerAddress: string;
+  customerFssai?: string;
+  /** ISO date string (end of day) or same-day display */
+  dueDate?: string;
+  shipToName?: string;
+  shipToAddress?: string;
+  shipToPhone?: string;
+  shipToGstin?: string;
+  sameShippingAsBilling?: boolean;
   sellerName: string;
   sellerGstin: string;
   sellerAddress: string;
   sellerPhone: string;
+  sellerEmail?: string;
+  sellerPan?: string;
+  sellerFssai?: string;
+  bankName?: string;
+  bankAccount?: string;
+  bankIfsc?: string;
+  bankBranch?: string;
+  accountHolderName?: string;
   lines: BillLineSnapshot[];
   taxableTotal: number;
   gstTotal: number;
@@ -39,6 +68,7 @@ export type SavedBill = {
   /** Inter-state supplies (IGST) */
   igst?: number;
   grandTotal: number;
+  totalDiscountAmount?: number;
   gstSupplyType?: 'intrastate' | 'interstate';
   customerGstin?: string;
   placeOfSupplyStateName?: string;
@@ -51,21 +81,47 @@ const defaultProfile: BillingProfile = {
   gstin: '',
   address: '',
   phone: '',
+  email: '',
+  pan: '',
+  fssai: '',
+  bankName: '',
+  bankAccount: '',
+  bankIfsc: '',
+  bankBranch: '',
+  accountHolderName: '',
+  termsAndConditions: '',
 };
+
+const defaultTerms = `1. Goods once sold will not be taken back or exchanged.
+2. Interest @ 18% p.a. will be charged on overdue invoices.
+3. Subject to local jurisdiction only.
+4. E. & O.E.`;
 
 export function loadBillingProfile(): BillingProfile {
   try {
     const raw = localStorage.getItem(PROFILE_KEY);
-    if (!raw) return { ...defaultProfile };
+    if (!raw) return { ...defaultProfile, termsAndConditions: defaultTerms };
     const p = JSON.parse(raw) as Partial<BillingProfile>;
     return {
       businessName: typeof p.businessName === 'string' ? p.businessName : '',
       gstin: typeof p.gstin === 'string' ? p.gstin : '',
       address: typeof p.address === 'string' ? p.address : '',
       phone: typeof p.phone === 'string' ? p.phone : '',
+      email: typeof p.email === 'string' ? p.email : '',
+      pan: typeof p.pan === 'string' ? p.pan : '',
+      fssai: typeof p.fssai === 'string' ? p.fssai : '',
+      bankName: typeof p.bankName === 'string' ? p.bankName : '',
+      bankAccount: typeof p.bankAccount === 'string' ? p.bankAccount : '',
+      bankIfsc: typeof p.bankIfsc === 'string' ? p.bankIfsc : '',
+      bankBranch: typeof p.bankBranch === 'string' ? p.bankBranch : '',
+      accountHolderName: typeof p.accountHolderName === 'string' ? p.accountHolderName : '',
+      termsAndConditions:
+        typeof p.termsAndConditions === 'string' && p.termsAndConditions.trim()
+          ? p.termsAndConditions
+          : defaultTerms,
     };
   } catch {
-    return { ...defaultProfile };
+    return { ...defaultProfile, termsAndConditions: defaultTerms };
   }
 }
 

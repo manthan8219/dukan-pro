@@ -170,11 +170,16 @@
 }
 
 .bill__lineGrid--gst {
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 2fr) repeat(6, minmax(0, 1fr));
+}
+
+.bill__lineGrid--quote {
+  grid-template-columns: minmax(0, 2fr) repeat(4, minmax(0, 1fr));
 }
 
 @media (max-width: 900px) {
-  .bill__lineGrid--gst {
+  .bill__lineGrid--gst,
+  .bill__lineGrid--quote {
     grid-template-columns: 1fr 1fr;
   }
 }
