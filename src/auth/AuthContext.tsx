@@ -19,8 +19,8 @@ import {
   clearPersistedRole,
   clearSession,
   setBackendUserId,
+  setCapabilities,
   setLastShopId,
-  setRole,
   setSellerOnboardingComplete,
   setUserId,
 } from './session';
@@ -36,7 +36,7 @@ type AuthContextValue = {
   backendProfile: BackendSession | null;
   /** Error message from the last sync attempt (cleared on success). */
   sessionError: string | null;
-  /** Re-run sync with the current Firebase user (e.g. after PATCH role). Returns the new profile or null on failure. */
+  /** Re-run sync with the current Firebase user (e.g. after PATCH capabilities). Returns the new profile or null on failure. */
   refreshBackendSession: () => Promise<BackendSession | null>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -70,14 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setBackendUserId(profile.id);
       setBackendProfile(profile);
-      if (profile.role == null) {
+      if (!profile.isCustomer && !profile.isSeller) {
         clearPersistedRole();
-      } else if (profile.role === 'SELLER') {
-        setRole('seller');
       } else {
-        setRole('customer');
+        setCapabilities(profile.isCustomer, profile.isSeller);
       }
-      if (profile.role === 'SELLER' && profile.sellerOnboardingComplete) {
+      if (profile.isSeller && profile.sellerOnboardingComplete) {
         try {
           const shops = await listShopsForUser(profile.id);
           const first = shops[0];
@@ -126,14 +124,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             setBackendUserId(profile.id);
             setBackendProfile(profile);
-            if (profile.role == null) {
+            if (!profile.isCustomer && !profile.isSeller) {
               clearPersistedRole();
-            } else if (profile.role === 'SELLER') {
-              setRole('seller');
             } else {
-              setRole('customer');
+              setCapabilities(profile.isCustomer, profile.isSeller);
             }
-            if (profile.role === 'SELLER' && profile.sellerOnboardingComplete) {
+            if (profile.isSeller && profile.sellerOnboardingComplete) {
               try {
                 const shops = await listShopsForUser(profile.id);
                 const first = shops[0];

@@ -14,6 +14,7 @@ import {
 } from '../auth/session';
 import { GoogleMapsEmbedMapPicker } from '../components/GoogleMapsEmbedMapPicker';
 import type { MapLocateEvent } from '../components/map';
+import type { MapGeocodeSettledPayload } from '../components/map/MapPinAddressSelect';
 import { MapPinAddressSelect } from '../components/map/MapPinAddressSelect';
 import {
   FALLBACK_MAP_CENTER,
@@ -147,13 +148,26 @@ export function SellerOnboardingPage() {
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [latitude, setLatitude] = useState(FALLBACK_MAP_CENTER.latitude);
   const [longitude, setLongitude] = useState(FALLBACK_MAP_CENTER.longitude);
-  const [pinLocationConfirmed, setPinLocationConfirmed] = useState(false);
-  const [pinLocationLabel, setPinLocationLabel] = useState('');
+  const [mapResolvedLabel, setMapResolvedLabel] = useState('');
   const [addressText, setAddressText] = useState('');
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
+  const [mapUserMoving, setMapUserMoving] = useState(false);
   /** Ignore the next N centre updates for clearing GPS accuracy (map sync + settle). */
   const skipAccuracyResetCountRef = useRef(0);
+  const mapUserMovingRef = useRef(false);
+  const userGesturedMapRef = useRef(false);
+  mapUserMovingRef.current = mapUserMoving;
+
+  const onMapGeocodeSettled = useCallback((p: MapGeocodeSettledPayload) => {
+    if (mapUserMovingRef.current || p.lookupFailed || !p.parts) return;
+    setMapResolvedLabel(p.parts.label);
+    setAddressText((prev) => {
+      if (!userGesturedMapRef.current && prev.trim()) return prev;
+      const bits = [p.parts!.line1, p.parts!.line2, p.parts!.city].filter((x) => x.trim());
+      return bits.length ? bits.join(', ') : p.parts!.label;
+    });
+  }, []);
   const pinStepGeolocationDoneRef = useRef(false);
   const [shopType, setShopType] = useState<'RETAIL' | 'WHOLESALE'>('RETAIL');
   const [dealIn, setDealIn] = useState<Set<string>>(() => new Set(['Groceries']));
@@ -171,7 +185,6 @@ export function SellerOnboardingPage() {
   const onMapCenterChange = useCallback((lat: number, lng: number) => {
     setLatitude(lat);
     setLongitude(lng);
-    setPinLocationConfirmed(false);
     if (skipAccuracyResetCountRef.current > 0) {
       skipAccuracyResetCountRef.current -= 1;
       return;
@@ -186,7 +199,6 @@ export function SellerOnboardingPage() {
     }
     if (ev.kind === 'success') {
       skipAccuracyResetCountRef.current = 4;
-      setPinLocationConfirmed(false);
       setLatitude(ev.latitude);
       setLongitude(ev.longitude);
       rememberDeviceCoordinates(ev.latitude, ev.longitude);
@@ -292,11 +304,7 @@ export function SellerOnboardingPage() {
     if (step === 0) return shopName.trim().length >= 2;
     if (step === 1) return true;
     if (step === 2) {
-      return (
-        pinLocationConfirmed &&
-        Number.isFinite(latitude) &&
-        Number.isFinite(longitude)
-      );
+      return Number.isFinite(latitude) && Number.isFinite(longitude);
     }
     if (step === 3) {
       if (gstChoice === 'unset') return false;
@@ -616,12 +624,8 @@ export function SellerOnboardingPage() {
                   variant="wiz"
                   latitude={latitude}
                   longitude={longitude}
-                  locationConfirmed={pinLocationConfirmed}
-                  confirmedLabel={pinLocationLabel}
-                  onSelectLocation={(label) => {
-                    setPinLocationLabel(label);
-                    setPinLocationConfirmed(true);
-                  }}
+                  mapInteracting={mapUserMoving}
+                  onGeocodeSettled={onMapGeocodeSettled}
                 />
                 {geoHint ? <p className="wiz__hint">{geoHint}</p> : null}
                 <GoogleMapsEmbedMapPicker
@@ -632,6 +636,10 @@ export function SellerOnboardingPage() {
                   onCenterChange={onMapCenterChange}
                   useMyLocationLabel="🛰️ Use my location"
                   onDeviceLocation={onMapDeviceLocation}
+                  onUserMapGestureActiveChange={(active) => {
+                    setMapUserMoving(active);
+                    if (active) userGesturedMapRef.current = true;
+                  }}
                 />
                 <label className="wiz__fieldLabel" htmlFor="addr">
                   Address (optional)
@@ -925,7 +933,7 @@ export function SellerOnboardingPage() {
                   </div>
                   <div className="wiz__summaryRow wiz__summaryRow--block">
                     <span>Pin</span>
-                    <strong>{pinLocationLabel.trim() || '—'}</strong>
+                    <strong>{mapResolvedLabel.trim() || addressText.trim() || '—'}</strong>
                   </div>
                   <div className="wiz__summaryRow">
                     <span>Vibe</span>

@@ -27,6 +27,8 @@ export type MapLibreLocationPickerProps = {
   useMyLocationLabel?: string;
   /** Optional hook for hints, `rememberDeviceCoordinates`, accuracy circle, skip-ref logic, etc. */
   onDeviceLocation?: (event: MapLocateEvent) => void;
+  /** True while the user is panning/zooming (not programmatic moves). */
+  onUserMapGestureActiveChange?: (active: boolean) => void;
 };
 
 function clampZoom(z: number): number {
@@ -54,6 +56,7 @@ export function MapLibreLocationPicker({
   showUseMyLocationButton = true,
   useMyLocationLabel = 'Use my location',
   onDeviceLocation,
+  onUserMapGestureActiveChange,
 }: MapLibreLocationPickerProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -62,6 +65,9 @@ export function MapLibreLocationPicker({
   onCenterChangeRef.current = onCenterChange;
   const onDeviceLocationRef = useRef(onDeviceLocation);
   onDeviceLocationRef.current = onDeviceLocation;
+  const onUserMapGestureActiveChangeRef = useRef(onUserMapGestureActiveChange);
+  onUserMapGestureActiveChangeRef.current = onUserMapGestureActiveChange;
+  const gestureEndTimerRef = useRef<number | null>(null);
   const rafRef = useRef<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -159,6 +165,35 @@ export function MapLibreLocationPicker({
     map.on('move', scheduleEmit);
     map.on('zoomend', emitCenter);
 
+    const clearGestureEndTimer = () => {
+      if (gestureEndTimerRef.current != null) {
+        window.clearTimeout(gestureEndTimerRef.current);
+        gestureEndTimerRef.current = null;
+      }
+    };
+    const scheduleGestureInactive = () => {
+      clearGestureEndTimer();
+      gestureEndTimerRef.current = window.setTimeout(() => {
+        gestureEndTimerRef.current = null;
+        onUserMapGestureActiveChangeRef.current?.(false);
+      }, 220);
+    };
+
+    const onMoveStart = (e: maplibregl.MapLibreEvent) => {
+      if (suppressEmitRef.current) return;
+      if (e.originalEvent) {
+        clearGestureEndTimer();
+        onUserMapGestureActiveChangeRef.current?.(true);
+      }
+    };
+    const onMoveEnd = () => {
+      if (suppressEmitRef.current) return;
+      scheduleGestureInactive();
+    };
+
+    map.on('movestart', onMoveStart);
+    map.on('moveend', onMoveEnd);
+
     const ro = new ResizeObserver(() => {
       map.resize();
     });
@@ -166,6 +201,8 @@ export function MapLibreLocationPicker({
 
     return () => {
       cancelled = true;
+      clearGestureEndTimer();
+      onUserMapGestureActiveChangeRef.current?.(false);
       ro.disconnect();
       if (rafRef.current != null) {
         cancelAnimationFrame(rafRef.current);

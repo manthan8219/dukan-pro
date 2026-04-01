@@ -624,7 +624,8 @@
 }
 
 .wiz__map {
-  height: min(44vh, 340px);
+  height: min(52vh, 480px);
+  min-height: 300px;
   width: 100%;
   border-radius: 18px;
   overflow: hidden;
@@ -634,7 +635,8 @@
 }
 
 .wiz__map.gmem {
-  height: min(44vh, 340px);
+  height: min(52vh, 480px);
+  min-height: 300px;
 }
 
 .wiz__map .gmem__frameWrap,

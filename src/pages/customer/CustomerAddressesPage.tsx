@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleMapsEmbedMapPicker } from '../../components/GoogleMapsEmbedMapPicker';
 import type { MapLocateEvent } from '../../components/map';
+import type { MapGeocodeSettledPayload } from '../../components/map/MapPinAddressSelect';
 import { MapPinAddressSelect } from '../../components/map/MapPinAddressSelect';
 import {
   FALLBACK_MAP_CENTER,
@@ -45,18 +46,35 @@ export function CustomerAddressesPage() {
 
   const [mapPinLat, setMapPinLat] = useState(FALLBACK_MAP_CENTER.latitude);
   const [mapPinLng, setMapPinLng] = useState(FALLBACK_MAP_CENTER.longitude);
-  const [pinLocationConfirmed, setPinLocationConfirmed] = useState(false);
-  const [pinLocationLabel, setPinLocationLabel] = useState('');
   const [geoHint, setGeoHint] = useState<string | null>(null);
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
+  const [mapUserMoving, setMapUserMoving] = useState(false);
   const skipAccuracyResetCountRef = useRef(0);
+  const mapUserMovingRef = useRef(false);
+  const userGesturedMapRef = useRef(false);
+  /** While editing an address that already has text, skip autofill until the user moves the map. */
+  const suppressAutofillRef = useRef(false);
+
+  mapUserMovingRef.current = mapUserMoving;
+
+  const onMapGeocodeSettled = useCallback((p: MapGeocodeSettledPayload) => {
+    if (mapUserMovingRef.current || p.lookupFailed || !p.parts) return;
+    if (suppressAutofillRef.current && !userGesturedMapRef.current) return;
+    setFields((prev) => ({
+      ...prev,
+      ...(p.parts!.line1.trim() ? { line1: p.parts!.line1.trim() } : {}),
+      ...(p.parts!.city.trim() ? { city: p.parts!.city.trim() } : {}),
+      ...(p.parts!.pin.trim()
+        ? { pin: p.parts!.pin.replace(/\D/g, '').slice(0, 6) }
+        : {}),
+      ...(p.parts!.line2.trim() && !prev.line2.trim() ? { line2: p.parts!.line2.trim() } : {}),
+    }));
+  }, []);
 
   const resetMapForNewAddress = useCallback(() => {
     const c = getCachedDeviceCoordinates();
     setMapPinLat(c?.latitude ?? FALLBACK_MAP_CENTER.latitude);
     setMapPinLng(c?.longitude ?? FALLBACK_MAP_CENTER.longitude);
-    setPinLocationConfirmed(false);
-    setPinLocationLabel('');
     setGeoHint(null);
     setLocAccuracyM(null);
   }, []);
@@ -67,16 +85,23 @@ export function CustomerAddressesPage() {
     setCustomLabel('');
     setFields({ ...emptyAddr });
     setFormError(null);
+    setMapUserMoving(false);
+    userGesturedMapRef.current = false;
+    suppressAutofillRef.current = false;
     resetMapForNewAddress();
     setShowForm(true);
   }
 
   function openEdit(s: SavedAddress) {
+    setMapUserMoving(false);
     setEditingId(s.id);
     setTag(s.tag);
     setCustomLabel(s.tag === 'other' ? s.label : '');
     setFields(toFields(s));
     setFormError(null);
+    userGesturedMapRef.current = false;
+    const f = toFields(s);
+    suppressAutofillRef.current = Boolean(f.line1.trim() || f.city.trim() || f.pin.trim());
     if (
       s.latitude != null &&
       s.longitude != null &&
@@ -85,9 +110,8 @@ export function CustomerAddressesPage() {
     ) {
       setMapPinLat(s.latitude);
       setMapPinLng(s.longitude);
-      setPinLocationConfirmed(true);
-      setPinLocationLabel(s.landmark?.trim() ? s.landmark.trim() : 'Saved map pin');
     } else {
+      suppressAutofillRef.current = false;
       resetMapForNewAddress();
     }
     setShowForm(true);
@@ -97,6 +121,7 @@ export function CustomerAddressesPage() {
     setShowForm(false);
     setEditingId(null);
     setFormError(null);
+    setMapUserMoving(false);
   }
 
   useEffect(() => {
@@ -107,8 +132,6 @@ export function CustomerAddressesPage() {
       skipAccuracyResetCountRef.current = 4;
       setMapPinLat(p.latitude);
       setMapPinLng(p.longitude);
-      setPinLocationConfirmed(false);
-      setPinLocationLabel('');
     });
     return () => {
       cancelled = true;
@@ -118,7 +141,6 @@ export function CustomerAddressesPage() {
   const onMapCenterChange = useCallback((lat: number, lng: number) => {
     setMapPinLat(lat);
     setMapPinLng(lng);
-    setPinLocationConfirmed(false);
     if (skipAccuracyResetCountRef.current > 0) {
       skipAccuracyResetCountRef.current -= 1;
       return;
@@ -133,7 +155,6 @@ export function CustomerAddressesPage() {
     }
     if (ev.kind === 'success') {
       skipAccuracyResetCountRef.current = 4;
-      setPinLocationConfirmed(false);
       setMapPinLat(ev.latitude);
       setMapPinLng(ev.longitude);
       rememberDeviceCoordinates(ev.latitude, ev.longitude);
@@ -167,8 +188,8 @@ export function CustomerAddressesPage() {
       e.preventDefault();
       const labelForOther = customLabel.trim() || 'Other';
       setFormError(null);
-      if (!pinLocationConfirmed || !Number.isFinite(mapPinLat) || !Number.isFinite(mapPinLng)) {
-        setFormError('Place the pin on the map at your delivery spot, then tap Confirm pin.');
+      if (!Number.isFinite(mapPinLat) || !Number.isFinite(mapPinLng)) {
+        setFormError('Place the pin on the map at your delivery spot.');
         return;
       }
       setSaving(true);
@@ -202,7 +223,6 @@ export function CustomerAddressesPage() {
       fields,
       tag,
       customLabel,
-      pinLocationConfirmed,
       mapPinLat,
       mapPinLng,
       updateSavedAddress,
@@ -231,7 +251,8 @@ export function CustomerAddressesPage() {
     <>
       <h2 className="cust__pageTitle">Delivery addresses</h2>
       <p className="cust__sub">
-        Choose a tag (Home, Office, or custom), <strong>pin the spot on the map</strong>, then fill in the details. The
+        Choose a tag (Home, Office, or custom), <strong>pin the spot on the map</strong> — street, city and PIN fill in
+        automatically (you can edit them). The
         address marked <strong>Active</strong> is used at checkout and in the header.
       </p>
       {error ? (
@@ -344,21 +365,17 @@ export function CustomerAddressesPage() {
           <div className="cust__addrMapSection">
             <p className="cust__addrMapTitle">Pin on map</p>
             <p className="cust__addrMapHint">
-              The <strong>teal pin stays in the centre</strong> — drag the map so it marks your door or gate. Then tap{' '}
-              <strong>Confirm pin</strong>.
+              The <strong>teal pin stays in the centre</strong> — drag the map so it marks your door or gate. When you stop,
+              we match this spot to street, city and PIN (edit if anything looks off). If you are editing an existing
+              address, move the map once to refresh those fields.
             </p>
             <MapPinAddressSelect
               className="cust__addrMapPick"
               latitude={mapPinLat}
               longitude={mapPinLng}
-              locationConfirmed={pinLocationConfirmed}
-              confirmedLabel={pinLocationLabel}
-              onSelectLocation={(label) => {
-                setPinLocationLabel(label);
-                setPinLocationConfirmed(true);
-              }}
-              selectButtonText="Confirm pin"
               variant="wiz"
+              mapInteracting={mapUserMoving}
+              onGeocodeSettled={onMapGeocodeSettled}
             />
             {geoHint ? <p className="cust__addrMapHint">{geoHint}</p> : null}
             <div className="cust__addrMapWrap">
@@ -373,6 +390,10 @@ export function CustomerAddressesPage() {
                 hintText="Drag the map — pin marks delivery point · pinch or controls to zoom"
                 useMyLocationLabel="Use my location"
                 onDeviceLocation={onMapDeviceLocation}
+                onUserMapGestureActiveChange={(active) => {
+                  setMapUserMoving(active);
+                  if (active) userGesturedMapRef.current = true;
+                }}
               />
             </div>
           </div>

@@ -5,6 +5,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { NotificationBell } from '../../components/NotificationBell';
 import { useSellerNotificationCounts } from '../../hooks/useSellerNotificationCounts';
 import { useAuth } from '../../auth/AuthContext';
+import { isAbsoluteHttpUrl, urlForCustomerPath } from '../../config/appOrigins';
 import { getLastShopId, isSellerOnboardingComplete, setSellerOnboardingComplete } from '../../auth/session';
 import './seller-dashboard.css';
 
@@ -94,12 +95,17 @@ export function SellerLayout() {
       navigate('/welcome/role', { replace: true });
       return;
     }
-    if (backendProfile.role == null) {
+    if (!backendProfile.isCustomer && !backendProfile.isSeller) {
       navigate('/welcome/role', { replace: true });
       return;
     }
-    if (backendProfile.role !== 'SELLER') {
-      navigate('/app/customer', { replace: true });
+    if (!backendProfile.isSeller) {
+      const dest = urlForCustomerPath('/app/customer');
+      if (isAbsoluteHttpUrl(dest)) {
+        window.location.replace(dest);
+        return;
+      }
+      navigate(dest, { replace: true });
     }
   }, [sessionSyncing, backendProfile, navigate]);
 

@@ -3,9 +3,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { patchUser } from '../api/users';
 import { useAuth } from '../auth/AuthContext';
-import { defaultPostLoginPath } from '../auth/postLoginRoute';
+import { resolvePostLoginDestination } from '../auth/postLoginRoute';
+import { getAppSurface } from '../config/appSurface';
+import { navigateInSplitApp, urlForBusinessPath, urlForCustomerPath } from '../config/appOrigins';
 import { useAuthFlash } from '../auth/AuthFlashContext';
-import { getBackendUserId, setRole } from '../auth/session';
+import { getBackendUserId } from '../auth/session';
 import './RoleSelectPage.css';
 
 const cardVariants = {
@@ -69,14 +71,18 @@ export function RoleSelectPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const isNew = params.get('new') === '1';
+  const surface = getAppSurface();
+  const showCustomerCard = surface === 'legacy' || surface === 'customer';
+  /** Business subdomain uses BusinessImplicitSellerPage instead of this screen. */
+  const showSellerCard = surface === 'legacy';
   const { backendProfile, sessionSyncing, refreshBackendSession } = useAuth();
   const { showFlash } = useAuthFlash();
   const [choosing, setChoosing] = useState(false);
 
   useEffect(() => {
     if (sessionSyncing || !backendProfile) return;
-    if (backendProfile.role != null) {
-      navigate(defaultPostLoginPath(backendProfile), { replace: true });
+    if (backendProfile.isCustomer || backendProfile.isSeller) {
+      navigateInSplitApp(navigate, resolvePostLoginDestination(backendProfile), { replace: true });
     }
   }, [sessionSyncing, backendProfile, navigate]);
 
@@ -93,10 +99,9 @@ export function RoleSelectPage() {
         });
         return;
       }
-      await patchUser(bid, { role: 'CUSTOMER' });
-      setRole('customer');
+      await patchUser(bid, { isCustomer: true });
       await refreshBackendSession();
-      navigate('/app/customer', { replace: true });
+      navigateInSplitApp(navigate, urlForCustomerPath('/app/customer'), { replace: true });
     } catch (e) {
       showFlash({
         title: 'Could not set customer role',
@@ -121,11 +126,11 @@ export function RoleSelectPage() {
         });
         return;
       }
-      await patchUser(bid, { role: 'SELLER' });
-      setRole('seller');
+      await patchUser(bid, { isSeller: true });
       const profile = await refreshBackendSession();
-      const goSellerApp = profile?.role === 'SELLER' && profile.sellerOnboardingComplete;
-      navigate(goSellerApp ? '/app/seller' : '/onboarding/seller', { replace: true });
+      const goSellerApp = profile?.isSeller && profile.sellerOnboardingComplete;
+      const sellerDest = goSellerApp ? '/app/seller' : '/onboarding/seller';
+      navigateInSplitApp(navigate, urlForBusinessPath(sellerDest), { replace: true });
     } catch (e) {
       showFlash({
         title: 'Could not set seller role',
@@ -176,13 +181,18 @@ export function RoleSelectPage() {
             <span className="rolePick__titleGrad">Choose your journey</span>
           </h1>
           <p className="rolePick__subtitle">
-            {isNew
-              ? 'Two paths — shop the neighbourhood or grow your dukaan online. Tap the card that fits you; this choice stays with your account.'
-              : 'Pick how you want to use DukaanPro. For security and data integrity, you cannot switch between customer and seller later.'}
+            {surface === 'customer'
+              ? isNew
+                ? 'You’re on the shopper app — discover stores and place orders. You can also use the seller hub later from the business app.'
+                : 'Enable shopping on this app. You can be a customer and a shop owner on the same account.'
+              : isNew
+                ? 'Two paths — shop the neighbourhood or grow your dukaan online. You can add the other anytime from the other app.'
+                : 'Pick how you want to start. You can enable buyer or seller (or both) over time.'}
           </p>
         </motion.header>
 
         <div className="rolePick__cards">
+          {showCustomerCard ? (
           <motion.button
             type="button"
             className="rolePick__card rolePick__card--customer"
@@ -220,7 +230,9 @@ export function RoleSelectPage() {
               </div>
             </span>
           </motion.button>
+          ) : null}
 
+          {showSellerCard ? (
           <motion.button
             type="button"
             className="rolePick__card rolePick__card--seller"
@@ -258,6 +270,7 @@ export function RoleSelectPage() {
               </div>
             </span>
           </motion.button>
+          ) : null}
         </div>
 
         <p className="rolePick__footerNote">DukaanPro · Your neighbourhood commerce</p>

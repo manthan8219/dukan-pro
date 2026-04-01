@@ -65,7 +65,8 @@
 }
 
 .sshop__map {
-  height: 220px;
+  min-height: 280px;
+  height: min(48vh, 440px);
   border-radius: 12px;
   overflow: hidden;
   margin-top: 0.35rem;

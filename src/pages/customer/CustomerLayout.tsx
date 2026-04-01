@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Link, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import type { BackendSession } from '../../api/authSync';
 import { NotificationBell } from '../../components/NotificationBell';
 import { useCustomerDemandAttentionCount } from '../../hooks/useCustomerDemandAttentionCount';
 import { useAuth } from '../../auth/AuthContext';
@@ -178,10 +177,6 @@ function CustomerShell({ children }: { children: ReactNode }) {
  * Wraps each customer route with auth, cart, and chrome. Flat routes avoid nested-Outlet issues
  * with some React Router 7 + BrowserRouter combinations (blank main area).
  */
-function sellerPrimaryPath(profile: BackendSession): string {
-  return profile.sellerOnboardingComplete ? '/app/seller' : '/onboarding/seller';
-}
-
 export function CustomerRouteShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { user, loading, firebaseConfigured, sessionSyncing, backendProfile } = useAuth();
@@ -207,13 +202,10 @@ export function CustomerRouteShell({ children }: { children: ReactNode }) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
 
-  if (backendProfile?.role == null) {
+  if (!backendProfile?.isCustomer && !backendProfile?.isSeller) {
     return <Navigate to="/welcome/role" replace />;
   }
 
-  if (backendProfile?.role === 'SELLER') {
-    return <Navigate to={sellerPrimaryPath(backendProfile)} replace />;
-  }
   return (
     <CustomerCartProvider>
       <CustomerDeliveryAddressesProvider userId={backendProfile.id}>

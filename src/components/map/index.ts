@@ -1,5 +1,11 @@
 export { ensureMapLibreWorker } from './ensureMapLibreWorker';
-export { reverseGeocode, searchPlaces, type GeocodeHit } from './geocoding';
+export {
+  reverseGeocode,
+  reverseGeocodeStructured,
+  searchPlaces,
+  type GeocodeHit,
+  type ReverseGeocodeParts,
+} from './geocoding';
 export { MAP_STYLE_DARK_VECTOR } from './mapStyle';
 export { MapLibreExplorerMap, DEFAULT_MAP_CENTER } from './MapLibreExplorerMap';
 export {
@@ -8,5 +14,6 @@ export {
   type MapLocateEvent,
 } from './MapLibreLocationPicker';
 export { MapPinAddressSelect, type MapPinAddressSelectProps } from './MapPinAddressSelect';
-export { useMapAddressPreview } from './useMapAddressPreview';
+export { useMapAddressGeocode, useMapAddressPreview } from './useMapAddressPreview';
+export type { MapGeocodeSettledPayload } from './MapPinAddressSelect';
 export { fetchOsrmRoute } from './osrmRoute';

@@ -378,16 +378,7 @@ export function SellerShopSettingsPage() {
           className="sshop__map"
           onDeviceLocation={onShopMapDeviceLocation}
         />
-        <MapPinAddressSelect
-          className="sshop__mapPick"
-          variant="sshop"
-          latitude={latitude}
-          longitude={longitude}
-          locationConfirmed={false}
-          confirmedLabel=""
-          onSelectLocation={() => {}}
-          showSelectButton={false}
-        />
+        <MapPinAddressSelect className="sshop__mapPick" variant="sshop" latitude={latitude} longitude={longitude} />
 
         <p className="sshop__label">Shop type</p>
         <div className="sshop__segRow">

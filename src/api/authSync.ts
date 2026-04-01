@@ -4,8 +4,10 @@ import { readErrorMessage } from './readErrorMessage';
 
 export type BackendSession = {
   id: string;
-  /** Null until the user picks customer or seller; then locked on the server. */
-  role: 'CUSTOMER' | 'SELLER' | null;
+  /** Buyer app (discover, orders, basket, …). */
+  isCustomer: boolean;
+  /** Seller hub (shop, inventory, …). */
+  isSeller: boolean;
   sellerOnboardingComplete: boolean;
 };
 

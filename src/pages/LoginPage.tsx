@@ -3,7 +3,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { GoogleSignInButton } from '../auth/GoogleSignInButton';
 import { useAuth } from '../auth/AuthContext';
-import { defaultPostLoginPath } from '../auth/postLoginRoute';
+import { resolvePostLoginDestination } from '../auth/postLoginRoute';
+import { navigateInSplitApp } from '../config/appOrigins';
+import { getAppSurface } from '../config/appSurface';
 import { useAuthFlash } from '../auth/AuthFlashContext';
 import {
   firebaseErrorCode,
@@ -56,16 +58,28 @@ export function LoginPage() {
       return;
     }
     if (!backendProfile) return;
-    if (backendProfile.role == null) {
+    if (!backendProfile.isCustomer && !backendProfile.isSeller) {
       navigate('/welcome/role', { replace: true });
       return;
     }
     const from = state?.from;
     if (typeof from === 'string' && from.startsWith('/')) {
+      const surface = getAppSurface();
+      if (
+        surface === 'customer' &&
+        (from.startsWith('/app/seller') || from.startsWith('/onboarding/seller'))
+      ) {
+        navigateInSplitApp(navigate, resolvePostLoginDestination(backendProfile), { replace: true });
+        return;
+      }
+      if (surface === 'business' && from.startsWith('/app/customer')) {
+        navigateInSplitApp(navigate, resolvePostLoginDestination(backendProfile), { replace: true });
+        return;
+      }
       navigate(from, { replace: true });
       return;
     }
-    navigate(defaultPostLoginPath(backendProfile), { replace: true });
+    navigateInSplitApp(navigate, resolvePostLoginDestination(backendProfile), { replace: true });
   }, [loading, user, sessionSyncing, sessionError, backendProfile, navigate, state?.from, showFlash]);
 
   useEffect(() => {

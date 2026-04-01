@@ -86,8 +86,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const [locAccuracyM, setLocAccuracyM] = useState<number | null>(null);
   const skipAccuracyResetCountRef = useRef(0);
   const receiptFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [deliveryLocationConfirmed, setDeliveryLocationConfirmed] = useState(false);
-  const [deliveryLocationLabel, setDeliveryLocationLabel] = useState('');
+  const [mapUserMoving, setMapUserMoving] = useState(false);
 
   const [quotesOpenFor, setQuotesOpenFor] = useState<string | null>(null);
   const [quotes, setQuotes] = useState<CustomerDemandQuotation[]>([]);
@@ -151,7 +150,6 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
   const onDeliveryMapCenterChange = useCallback((lat: number, lng: number) => {
     setDeliveryPinLat(lat);
     setDeliveryPinLng(lng);
-    setDeliveryLocationConfirmed(false);
     if (skipAccuracyResetCountRef.current > 0) {
       skipAccuracyResetCountRef.current -= 1;
       return;
@@ -166,7 +164,6 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     }
     if (ev.kind === 'success') {
       skipAccuracyResetCountRef.current = 4;
-      setDeliveryLocationConfirmed(false);
       setDeliveryPinLat(ev.latitude);
       setDeliveryPinLng(ev.longitude);
       rememberDeviceCoordinates(ev.latitude, ev.longitude);
@@ -205,7 +202,8 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
     details.trim().length > 0 &&
     orderMeetsMin &&
     Boolean(receiptContentId) &&
-    deliveryLocationConfirmed;
+    Number.isFinite(deliveryPinLat) &&
+    Number.isFinite(deliveryPinLng);
 
   async function onRegisterReceiptUrl() {
     setFormError(null);
@@ -271,8 +269,6 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
       setOrderTotalInput('');
       setReceiptUrl('');
       setReceiptContentId(null);
-      setDeliveryLocationConfirmed(false);
-      setDeliveryLocationLabel('');
       refresh();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Create failed');
@@ -475,13 +471,14 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
 
         <p className="dm__label">Delivery location (map)</p>
         <p className="dm__hint" style={{ marginTop: '-0.35rem', marginBottom: '0.5rem' }}>
-          Use <strong>Use my location</strong> on the map or drag so the centre pin sits on your door or lane — we use that
-          point to match shop delivery circles.
+          Use <strong>Use my location</strong> on the map or drag so the centre pin sits on your door or lane — that point is
+          saved when you create the request and used to match shop delivery circles.
         </p>
         <div
           className="cust__mapWrap"
           style={{
-            height: 280,
+            minHeight: 300,
+            height: 'min(52vh, 520px)',
             borderRadius: 14,
             overflow: 'hidden',
             marginBottom: '0.65rem',
@@ -498,6 +495,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
             mapAriaLabel="Map: drag so the centre pin is on your delivery address"
             hintText="Drag the map — pin marks delivery point · pinch or controls to zoom"
             onDeviceLocation={onDeliveryMapDeviceLocation}
+            onUserMapGestureActiveChange={setMapUserMoving}
           />
         </div>
         <MapPinAddressSelect
@@ -505,13 +503,7 @@ export function CustomerDemandsServerView({ serverUserId }: { serverUserId: stri
           variant="dm"
           latitude={deliveryPinLat}
           longitude={deliveryPinLng}
-          locationConfirmed={deliveryLocationConfirmed}
-          confirmedLabel={deliveryLocationLabel}
-          onSelectLocation={(label) => {
-            setDeliveryLocationLabel(label);
-            setDeliveryLocationConfirmed(true);
-          }}
-          selectButtonText="Select delivery location"
+          mapInteracting={mapUserMoving}
         />
         {geoHint ? <p className="dm__hint">{geoHint}</p> : null}
 

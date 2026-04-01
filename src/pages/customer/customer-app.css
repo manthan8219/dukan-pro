@@ -1405,7 +1405,8 @@
 
 .cust__addrMapWrap {
   position: relative;
-  height: 270px;
+  min-height: 300px;
+  height: min(52vh, 520px);
   border-radius: 18px;
   overflow: hidden;
   margin-bottom: 0.55rem;

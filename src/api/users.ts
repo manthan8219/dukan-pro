@@ -2,7 +2,8 @@ import { getApiBase } from './baseUrl';
 import { readErrorMessage } from './readErrorMessage';
 
 export type PatchUserPayload = {
-  role?: 'CUSTOMER' | 'SELLER';
+  isCustomer?: boolean;
+  isSeller?: boolean;
   sellerOnboardingComplete?: boolean;
 };
 

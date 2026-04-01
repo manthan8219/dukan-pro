@@ -79,3 +79,12 @@
 .mapPick--dm .mapPick__hint {
   color: #94a3b8;
 }
+
+.mapPick__hint--moving {
+  font-weight: 700;
+  color: #0d9488;
+}
+
+.mapPick--dm .mapPick__hint--moving {
+  color: #5eead4;
+}
